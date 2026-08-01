@@ -332,16 +332,21 @@ function normalizeRecord(record, index) {
   // Ubicación mapeada a zonas conocidas de EvenGo
   const location = normalizeLocation(record.barrio || record.domicilio || '');
 
+  // Título extraído a variable para reutilizarlo en la URL dinámica
+  const title = record.nombre_actividad || record.nombre || 'Actividad sin título';
+
   return {
     id,
-    title:       record.nombre_actividad || record.nombre || 'Actividad sin título',
+    title,
     description: record.descripcion || '',
     category:    classifyCategory(searchText),
     date,
     time,
     location,
     address:     record.domicilio || location,
-    url:         record.url || `https://buenosaires.gob.ar/actividades/${id}`,
+    // URL dinámica al buscador activo del portal cultural GCBA.
+    // Reemplaza las rutas /actividades/ deprecadas que devolvían 404.
+    url:         `https://descubrir.buenosaires.gob.ar/?q=${encodeURIComponent(title)}`,
     source:      'GCBA',   // campo estático requerido por el schema
   };
 }
