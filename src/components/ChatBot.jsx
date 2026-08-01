@@ -3,9 +3,6 @@ import { useEventContext } from '../hooks/useEventContext';
 
 /**
  * ChatBot: Asistente Virtual Flotante de EvenGo con Google Gemini
- * 
- * Ofrece recomendaciones culturales personalizadas basadas en los eventos filtrados
- * en la interfaz del usuario, enviando un payload optimizado a la Serverless Function /api/chat.
  */
 export default function ChatBot() {
   const { filteredEvents } = useEventContext();
@@ -23,7 +20,6 @@ export default function ChatBot() {
 
   const messagesEndRef = useRef(null);
 
-  // Auto-scroll al recibir o enviar un nuevo mensaje
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -34,7 +30,6 @@ export default function ChatBot() {
     }
   }, [messages, isLoading, isOpen]);
 
-  // Manejador del envío de mensaje
   const handleSendMessage = async (textToSend) => {
     const query = textToSend || input;
     if (!query.trim() || isLoading) return;
@@ -45,14 +40,12 @@ export default function ChatBot() {
       text: query.trim(),
     };
 
-    // Actualizar historial local con el mensaje del usuario
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
     try {
-      // ── Optimización de Contexto ─────────────────────────────────────────
-      // Mapear filteredEvents para enviar solo campos esenciales recortado a un máximo de 20
+      // Optimización de Contexto: Recorte a máximo 20 eventos y extracción de campos esenciales
       const contextData = (filteredEvents || []).slice(0, 20).map((event) => ({
         title: event.title,
         category: event.category,
@@ -63,7 +56,7 @@ export default function ChatBot() {
         description: event.description || '',
       }));
 
-      // Llamada POST a la Vercel Serverless Function /api/chat
+      // Petición POST a la Serverless Function /api/chat con Content-Type application/json
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -84,16 +77,16 @@ export default function ChatBot() {
       const botMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: data.reply || 'No pude obtener una respuesta adecuada en este momento.',
+        text: data.reply || 'No pude generar una respuesta adecuada en este momento.',
       };
 
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
-      console.error('[ChatBot] Error al consultar /api/chat:', error);
+      console.error('[ChatBot] Error al comunicarse con /api/chat:', error);
       const errorMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: `⚠️ Lo siento, ocurrió un inconveniente al consultar con el asistente (${error.message}). Por favor, verifica la API Key o intenta nuevamente más tarde.`,
+        text: `⚠️ Ocurrió un error al consultar con la IA (${error.message}). Por favor, verifica la configuración de GEMINI_API_KEY en Vercel.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -108,7 +101,6 @@ export default function ChatBot() {
     }
   };
 
-  // Sugerencias rápidas para el usuario
   const promptSuggestions = [
     '¿Qué eventos hay este fin de semana?',
     'Recomiéndame un concierto en Palermo',
@@ -117,14 +109,10 @@ export default function ChatBot() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-      {/* ── Ventana del Chat (Modal estilo Tarjeta) ────────────────────────── */}
+      {/* Ventana de Chat Modal */}
       {isOpen && (
-        <div
-          className="w-[90vw] sm:w-96 h-[520px] mb-4 flex flex-col rounded-2xl
-            bg-slate-900/95 backdrop-blur-xl border border-white/10 shadow-2xl
-            overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-5"
-        >
-          {/* Header del Chat */}
+        <div className="w-[90vw] sm:w-96 h-[520px] mb-4 flex flex-col rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden transition-all duration-300">
+          {/* Header */}
           <div className="px-4 py-3.5 bg-slate-950/80 border-b border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -136,15 +124,13 @@ export default function ChatBot() {
               <div>
                 <h3 className="text-white font-bold text-sm leading-tight flex items-center gap-1.5">
                   EvenGo AI
-                  <span className="px-1.5 py-0.2 text-[10px] bg-indigo-500/20 text-indigo-300 rounded-md font-mono font-medium border border-indigo-500/30">
+                  <span className="px-1.5 py-0.5 text-[10px] bg-indigo-500/20 text-indigo-300 rounded-md font-mono border border-indigo-500/30">
                     Gemini 1.5
                   </span>
                 </h3>
                 <p className="text-slate-400 text-xs">Asistente de Eventos en BA</p>
               </div>
             </div>
-
-            {/* Botón Cerrar */}
             <button
               onClick={() => setIsOpen(false)}
               className="text-slate-400 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-colors"
@@ -192,7 +178,7 @@ export default function ChatBot() {
               </div>
             )}
 
-            {/* Sugerencias Rápidas al inicio */}
+            {/* Sugerencias Rápidas */}
             {messages.length === 1 && !isLoading && (
               <div className="pt-2">
                 <p className="text-slate-500 text-xs mb-2 font-medium">Sugerencias rápidas:</p>
@@ -213,7 +199,7 @@ export default function ChatBot() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Formulario de Entrada */}
+          {/* Formulario Input */}
           <div className="p-3 bg-slate-950/90 border-t border-white/10 flex items-center gap-2">
             <input
               type="text"
@@ -236,7 +222,7 @@ export default function ChatBot() {
         </div>
       )}
 
-      {/* ── Botón Flotante Principal ───────────────────────────────────────── */}
+      {/* Botón Flotante */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
         className={`group relative flex items-center justify-center p-4 rounded-full shadow-2xl transition-all duration-300 active:scale-95 ${
@@ -257,7 +243,6 @@ export default function ChatBot() {
           </div>
         )}
 
-        {/* Notificación indicadora si está cerrado */}
         {!isOpen && (
           <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75" />
