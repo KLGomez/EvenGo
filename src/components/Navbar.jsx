@@ -1,7 +1,8 @@
 import React from 'react';
+import { NavLink, Link } from 'react-router-dom';
 
 /**
- * Barra de navegación superior con branding de EvenGo.
+ * Barra de navegación superior con branding de EvenGo y enrutamiento activo.
  */
 export default function Navbar() {
   return (
@@ -11,11 +12,12 @@ export default function Navbar() {
           px-4 sm:px-6 py-4"
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2.5">
+          {/* Logo y Nombre */}
+          <Link to="/" className="flex items-center gap-2.5 group">
             <div
               className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600
-                flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30"
+                flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30
+                group-hover:scale-105 transition-transform"
             >
               🗺️
             </div>
@@ -27,22 +29,41 @@ export default function Navbar() {
                 Buenos Aires
               </p>
             </div>
-          </div>
+          </Link>
 
-          {/* Tagline */}
-          <p className="hidden md:block text-slate-400 text-sm">
-            Descubrí los mejores eventos de tu ciudad 🇦🇷
-          </p>
+          {/* Menú de Navegación Principal */}
+          <nav className="flex items-center gap-3 sm:gap-4">
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                `text-xs sm:text-sm font-semibold px-3 py-2 rounded-xl transition-all ${
+                  isActive
+                    ? 'bg-white/10 text-white border border-white/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`
+              }
+            >
+              Agenda 📅
+            </NavLink>
 
-          {/* CTA */}
-          <a
-            href="#eventos"
-            className="text-xs font-semibold px-4 py-2 rounded-xl
-              bg-indigo-500/20 border border-indigo-500/30 text-indigo-300
-              hover:bg-indigo-500/30 transition-colors"
-          >
-            Ver eventos →
-          </a>
+            {/* Ítem Destacado: Radar Cultural 📊 */}
+            <NavLink
+              to="/radar-cultural"
+              className={({ isActive }) =>
+                `text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 border border-indigo-400/40'
+                    : 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25 hover:text-white'
+                }`
+              }
+            >
+              <span>Radar Cultural</span>
+              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-indigo-400/30 text-indigo-200 rounded-md border border-indigo-400/20">
+                PRO
+              </span>
+            </NavLink>
+          </nav>
         </div>
       </div>
     </header>

@@ -1,16 +1,18 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import FilterPanel from './components/FilterPanel';
 import EventGrid from './components/EventGrid';
 import DataSourceBanner from './components/DataSourceBanner';
-import { useEvents } from './hooks/useEvents';
+import Dashboard from './components/Dashboard';
+import { EventProvider } from './context/EventProvider';
+import { useEventContext } from './hooks/useEventContext';
 
 /**
- * Componente raíz de EvenGo.
- * Orquesta todos los componentes y el estado de la aplicación.
+ * Vista Principal: Agenda de Eventos
  */
-export default function App() {
+function HomeView() {
   const {
     filters,
     filteredEvents,
@@ -21,78 +23,100 @@ export default function App() {
     error,
     usingMocks,
     retry,
-  } = useEvents();
+  } = useEventContext();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* Fondo general con gradiente sutil */}
-      <div
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.12), transparent)',
-        }}
-        aria-hidden="true"
-      />
+    <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-20">
+      {/* Hero */}
+      <Hero totalEvents={totalEvents} />
 
-      <div className="relative z-10">
-        <Navbar />
-
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-20">
-          {/* Hero */}
-          <Hero totalEvents={totalEvents} />
-
-          {/* Layout: filtros + grid */}
-          <div className="flex flex-col lg:flex-row gap-6 mt-6">
-            {/* Sidebar de filtros */}
-            <div className="w-full lg:w-72 lg:flex-shrink-0">
-              <div className="lg:sticky lg:top-24">
-                <FilterPanel
-                  filters={filters}
-                  onFilterChange={updateFilter}
-                  onReset={resetFilters}
-                  resultCount={filteredEvents.length}
-                />
-              </div>
-            </div>
-
-            {/* Grid de eventos */}
-            <div className="flex-1 min-w-0">
-              {/* Banner de estado de la fuente de datos */}
-              <DataSourceBanner
-                loading={loading}
-                error={error}
-                usingMocks={usingMocks}
-                onRetry={retry}
-              />
-
-              {/* Encabezado del grid */}
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-white font-bold text-lg">
-                  Eventos{' '}
-                  {filters.location !== 'Todas las zonas' && (
-                    <span className="text-indigo-400">en {filters.location}</span>
-                  )}
-                </h2>
-                <span className="text-slate-500 text-sm">
-                  {filteredEvents.length} de {totalEvents}
-                </span>
-              </div>
-
-              <EventGrid events={filteredEvents} onReset={resetFilters} />
-            </div>
+      {/* Layout principal: filtros + grid */}
+      <div className="flex flex-col lg:flex-row gap-6 mt-6">
+        {/* Sidebar de filtros */}
+        <div className="w-full lg:w-72 lg:flex-shrink-0">
+          <div className="lg:sticky lg:top-24">
+            <FilterPanel
+              filters={filters}
+              onFilterChange={updateFilter}
+              onReset={resetFilters}
+              resultCount={filteredEvents.length}
+            />
           </div>
-        </main>
+        </div>
 
-        {/* Footer */}
-        <footer className="border-t border-white/5 py-8 text-center">
-          <p className="text-slate-600 text-sm">
-            © 2026{' '}
-            <span className="text-indigo-400 font-semibold">EvenGo</span>{' '}
-            · Hecho con ❤️ en Buenos Aires
-          </p>
-        </footer>
+        {/* Grid de eventos */}
+        <div className="flex-1 min-w-0">
+          {/* Banner de estado de la fuente de datos */}
+          <DataSourceBanner
+            loading={loading}
+            error={error}
+            usingMocks={usingMocks}
+            onRetry={retry}
+          />
+
+          {/* Encabezado del grid */}
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-white font-bold text-lg">
+              Eventos{' '}
+              {filters.location !== 'Todas las zonas' && (
+                <span className="text-indigo-400">en {filters.location}</span>
+              )}
+            </h2>
+            <span className="text-slate-500 text-sm">
+              {filteredEvents.length} de {totalEvents}
+            </span>
+          </div>
+
+          <EventGrid events={filteredEvents} onReset={resetFilters} />
+        </div>
       </div>
-    </div>
+    </main>
+  );
+}
+
+/**
+ * Componente Raíz de la Aplicación EvenGo
+ * Orquesta el proveedor de contexto global y el enrutamiento principal.
+ */
+export default function App() {
+  return (
+    <EventProvider>
+      <BrowserRouter>
+        <div className="min-h-screen bg-slate-950 text-white">
+          {/* Fondo estético con gradiente radial */}
+          <div
+            className="fixed inset-0 pointer-events-none z-0"
+            style={{
+              background:
+                'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.12), transparent)',
+            }}
+            aria-hidden="true"
+          />
+
+          <div className="relative z-10">
+            {/* Navbar compartido en todas las rutas */}
+            <Navbar />
+
+            {/* Configuración de Rutas */}
+            <Routes>
+              {/* Ruta Principal: Agenda de Eventos */}
+              <Route path="/" element={<HomeView />} />
+
+              {/* Ruta Inmersiva: Radar Cultural (Dashboard Analítico) */}
+              <Route path="/radar-cultural" element={<Dashboard />} />
+            </Routes>
+
+            {/* Footer Global */}
+            <footer className="border-t border-white/5 py-8 text-center">
+              <p className="text-slate-600 text-sm">
+                © 2026{' '}
+                <span className="text-indigo-400 font-semibold">EvenGo</span>{' '}
+                · Hecho con ❤️ en Buenos Aires
+              </p>
+            </footer>
+          </div>
+        </div>
+      </BrowserRouter>
+    </EventProvider>
   );
 }
