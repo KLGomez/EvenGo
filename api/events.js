@@ -178,11 +178,10 @@ function normalizeRecord(event) {
   const location = normalizeLocation(event.barrio, event.ubicacion);
   const address  = event.direccion || event.ubicacion?.direccion || location;
 
-  // ── URL: construida desde pathAlias (ruta canónica) o slug como fallback
-  // pathAlias viene como "/descubrir/slug-del-evento"
-  const url = event.pathAlias
-    ? `${LINDA_BASE}${event.pathAlias}`
-    : `${LINDA_BASE}/descubrir/${event.slug || id}`;
+  // ── URL: extraer el slug final de pathAlias y usar la ruta pública /eventos/
+  // pathAlias viene como "/descubrir/slug-del-evento" → tomamos solo "slug-del-evento"
+  const slug = (event.pathAlias || event.slug || id).split("/").filter(Boolean).pop();
+  const url  = `${LINDA_BASE}/eventos/${slug}`;
 
   // ── Categoría ─────────────────────────────────────────────────────────────
   const category = classifyCategory(event.etiquetas, event.tipoEvento);
