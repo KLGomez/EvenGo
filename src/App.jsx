@@ -6,6 +6,7 @@ import FilterPanel from './components/FilterPanel';
 import EventGrid from './components/EventGrid';
 import DataSourceBanner from './components/DataSourceBanner';
 import Dashboard from './components/Dashboard';
+import ChatBot from './components/ChatBot';
 import { EventProvider } from './context/EventProvider';
 import { useEventContext } from './hooks/useEventContext';
 
@@ -106,6 +107,9 @@ export default function App() {
               <Route path="/radar-cultural" element={<Dashboard />} />
             </Routes>
 
+            {/* Widget de Asistente Virtual Flotante (Google Gemini) */}
+            <ChatBot />
+
             {/* Footer Global */}
             <footer className="border-t border-white/5 py-8 text-center">
               <p className="text-slate-600 text-sm">
@@ -120,3 +124,4 @@ export default function App() {
     </EventProvider>
   );
 }
+
