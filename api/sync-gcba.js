@@ -344,9 +344,11 @@ function normalizeRecord(record, index) {
     time,
     location,
     address:     record.domicilio || location,
-    // URL dinámica al buscador activo del portal cultural GCBA.
-    // Reemplaza las rutas /actividades/ deprecadas que devolvían 404.
-    url:         `https://descubrir.buenosaires.gob.ar/?q=${encodeURIComponent(title)}`,
+    // Usa la URL original solo si ya apunta al nuevo dominio 'Linda'.
+    // En cualquier otro caso (rota, obsoleta o ausente), construye el enlace dinámico.
+    url: (record.url && record.url.includes('linda.buenosaires.gob.ar'))
+      ? record.url
+      : `https://linda.buenosaires.gob.ar/eventos?q=${encodeURIComponent(title)}`,
     source:      'GCBA',   // campo estático requerido por el schema
   };
 }
