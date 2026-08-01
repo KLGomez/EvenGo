@@ -117,7 +117,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '1',
     lat: '-34.6037',
     lng: '-58.3816',
-    url: 'https://www.buenosaires.gob.ar/actividades/concierto-tango-obelisco',
+
     organismo: 'Ministerio de Cultura GCBA',
     gratuito: 'Si',
   },
@@ -135,7 +135,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '14',
     lat: '-34.5808',
     lng: '-58.4175',
-    url: 'https://www.buenosaires.gob.ar/actividades/feria-gastronomica-palermo',
+
     organismo: 'Secretaría de Desarrollo Económico GCBA',
     gratuito: 'Si',
   },
@@ -153,7 +153,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '14',
     lat: '-34.5731',
     lng: '-58.4180',
-    url: 'https://www.buenosaires.gob.ar/actividades/maraton-solidaria-gcba',
+
     organismo: 'Secretaría de Deportes GCBA',
     gratuito: 'Si',
   },
@@ -171,7 +171,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '1',
     lat: '-34.6270',
     lng: '-58.3695',
-    url: 'https://www.buenosaires.gob.ar/actividades/exposicion-arte-contemporaneo',
+
     organismo: 'Ministerio de Cultura GCBA',
     gratuito: 'Si',
   },
@@ -189,7 +189,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '4',
     lat: '-34.6365',
     lng: '-58.3633',
-    url: 'https://www.buenosaires.gob.ar/actividades/festival-jazz-la-boca',
+
     organismo: 'Ministerio de Cultura GCBA',
     gratuito: 'Si',
   },
@@ -207,7 +207,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '14',
     lat: '-34.5801',
     lng: '-58.4163',
-    url: 'https://www.buenosaires.gob.ar/actividades/cine-parques-gcba',
+
     organismo: 'Ministerio de Cultura GCBA',
     gratuito: 'Si',
   },
@@ -225,7 +225,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '3',
     lat: '-34.6038',
     lng: '-58.3853',
-    url: 'https://www.buenosaires.gob.ar/actividades/taller-cocina-saludable',
+
     organismo: 'Ministerio de Salud GCBA',
     gratuito: 'Si',
   },
@@ -243,7 +243,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '13',
     lat: '-34.5595',
     lng: '-58.4524',
-    url: 'https://www.buenosaires.gob.ar/actividades/torneo-ajedrez-ciudad',
+
     organismo: 'Secretaría de Deportes GCBA',
     gratuito: 'Si',
   },
@@ -261,7 +261,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '6',
     lat: '-34.6063',
     lng: '-58.4370',
-    url: 'https://www.buenosaires.gob.ar/actividades/recital-rock-anfiteatro',
+
     organismo: 'Ministerio de Cultura GCBA',
     gratuito: 'Si',
   },
@@ -279,7 +279,7 @@ const GCBA_MOCK_RECORDS = [
     comuna: '3',
     lat: '-34.6038',
     lng: '-58.3853',
-    url: 'https://www.buenosaires.gob.ar/actividades/semana-danza-contemporanea',
+
     organismo: 'Ministerio de Cultura GCBA',
     gratuito: 'Si',
   },
