@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { useEventAnalytics } from '../hooks/useEventAnalytics';
 import { useEventContext } from '../hooks/useEventContext';
+import { downloadCSV } from '../utils/exportToCSV';
 
 // Paletas de colores vibrantes para los gráficos
 const PRICING_COLORS = {
@@ -34,7 +35,8 @@ const RADAR_COLOR = '#8B5CF6'; // Violeta principal para el radar temático
  * Componente Visual: Dashboard Cultural de EvenGo (Vista Inmersiva /radar-cultural)
  * 
  * Consume el contexto global de eventos y el motor analítico `useEventAnalytics`
- * para renderizar indicadores KPI y gráficos interactivos con Recharts.
+ * para renderizar tarjetas KPI e indicadores gráficos interactivos con Recharts,
+ * e incluye función de exportación a CSV.
  */
 export function Dashboard() {
   // Consumo del estado global para reutilizar la data en memoria sin re-fetchear
@@ -47,7 +49,7 @@ export function Dashboard() {
     <div className="min-h-screen bg-slate-950 text-white pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
         
-        {/* UX de Retorno + Encabezado de la Ruta Inmersiva */}
+        {/* UX de Retorno + Encabezado de la Ruta Inmersiva + Botón Exportar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 border-b border-white/10 pb-6">
           <div>
             <Link
@@ -64,12 +66,26 @@ export function Dashboard() {
             </p>
           </div>
 
-          {usingMocks && (
-            <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              Modo Mocks Activado
-            </div>
-          )}
+          {/* Acciones de Encabezado (Badge Mocks + Botón CSV) */}
+          <div className="flex flex-wrap items-center gap-3">
+            {usingMocks && (
+              <div className="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                Modo Mocks Activado
+              </div>
+            )}
+
+            {/* Botón Ghost de Exportar Datos CSV */}
+            <button
+              onClick={() => downloadCSV(events, 'evengo-radar-cultural.csv')}
+              disabled={events.length === 0}
+              className="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-white/5 hover:bg-white/10 active:scale-95 text-slate-200 border border-white/10 hover:border-white/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Descargar eventos en formato CSV"
+            >
+              <span>📥</span>
+              <span>Exportar Datos (CSV)</span>
+            </button>
+          </div>
         </div>
 
         {/* Estado de Carga / Error */}
@@ -90,7 +106,7 @@ export function Dashboard() {
           </div>
         ) : (
           <>
-            {/* ── Fila de Indicadores Clave (KPIs) ───────────────────────── */}
+            {/* ── Fila Superior de Tarjetas KPI ───────────────────────────── */}
             <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               {/* Card 1: Total Eventos */}
               <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl shadow-lg flex flex-col gap-2">
@@ -143,7 +159,7 @@ export function Dashboard() {
               </div>
             </section>
 
-            {/* ── Grid Responsivo de Gráficos Recharts ───────────────────── */}
+            {/* ── Grid de Gráficos Recharts ───────────────────────────────── */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               
               {/* 1. PieChart: Gratuitos vs Pagos */}
