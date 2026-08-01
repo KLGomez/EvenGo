@@ -44,6 +44,7 @@ export const mockEvents = [
     location: 'Palermo',
     address: 'Av. Ángel Gallardo 490, Parque Centenario',
     url: 'https://ejemplo.com/rock-centenario',
+    price: 'Gratis',
   },
   {
     id: 2,
@@ -56,6 +57,7 @@ export const mockEvents = [
     location: 'San Telmo',
     address: 'Defensa 1100, Plaza Dorrego',
     url: 'https://ejemplo.com/feria-santelmo',
+    price: 'Gratis',
   },
   {
     id: 3,
@@ -68,6 +70,7 @@ export const mockEvents = [
     location: 'Quilmes',
     address: 'Av. Rivadavia 200, Quilmes Centro',
     url: 'https://ejemplo.com/maraton-quilmes',
+    price: 8000,
   },
   {
     id: 4,
@@ -80,6 +83,7 @@ export const mockEvents = [
     location: 'Obelisco / Centro',
     address: 'Av. Corrientes 1600, CABA',
     url: 'https://ejemplo.com/arte-urbano-obelisco',
+    price: 'Gratis',
   },
   {
     id: 5,
@@ -92,6 +96,7 @@ export const mockEvents = [
     location: 'La Boca',
     address: 'Caminito 100, La Boca',
     url: 'https://ejemplo.com/jazz-laboca',
+    price: 12500,
   },
   {
     id: 6,
@@ -104,6 +109,7 @@ export const mockEvents = [
     location: 'Belgrano',
     address: 'Cuba 2222, Club Atlético Belgrano',
     url: 'https://ejemplo.com/torneo-ajedrez-belgrano',
+    price: 4500,
   },
   {
     id: 7,
@@ -116,6 +122,7 @@ export const mockEvents = [
     location: 'Palermo',
     address: 'Thames 1744, Cine Arte Palermo',
     url: 'https://ejemplo.com/cine-silente-palermo',
+    price: 6000,
   },
   {
     id: 8,
@@ -128,5 +135,6 @@ export const mockEvents = [
     location: 'Belgrano',
     address: 'Juramento 1400, Belgrano',
     url: 'https://ejemplo.com/brunch-vegano',
+    price: 15000,
   },
 ];
