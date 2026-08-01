@@ -12,6 +12,11 @@ import {
   Legend,
   CartesianGrid,
   ResponsiveContainer,
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
 } from 'recharts';
 import { useEventAnalytics } from '../hooks/useEventAnalytics';
 import { useEventContext } from '../hooks/useEventContext';
@@ -23,6 +28,7 @@ const PRICING_COLORS = {
 };
 
 const BAR_COLOR = '#3B82F6'; // Azul primario para barrios
+const RADAR_COLOR = '#8B5CF6'; // Violeta principal para el radar temático
 
 /**
  * Componente Visual: Dashboard Cultural de EvenGo (Vista Inmersiva /radar-cultural)
@@ -35,7 +41,7 @@ export function Dashboard() {
   const { events, loading, error, usingMocks, retry } = useEventContext();
 
   // Invocación del Motor Analítico
-  const { pricingStats, topLocations } = useEventAnalytics(events);
+  const { pricingStats, topLocations, categoryStats } = useEventAnalytics(events);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-20">
@@ -84,7 +90,7 @@ export function Dashboard() {
           </div>
         ) : (
           /* Grid responsivo de gráficos */
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
             {/* ── 1. Gráfico de Torta: Gratuitos vs Pagos ────────────────── */}
             <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl">
@@ -161,6 +167,37 @@ export function Dashboard() {
                       radius={[8, 8, 0, 0]}
                     />
                   </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </article>
+
+            {/* ── 3. Gráfico de Radar: Ecosistema Temático ────────────────── */}
+            <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl col-span-1 md:col-span-2 lg:col-span-1">
+              <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                🕸️ Ecosistema Temático
+              </h2>
+              <p className="text-xs text-slate-400 mb-4">
+                Distribución de eventos por las 6 principales categorías
+              </p>
+
+              <div className="w-full h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="75%" data={categoryStats}>
+                    <PolarGrid stroke="#334155" />
+                    <PolarAngleAxis dataKey="name" tick={{ fill: '#94A3B8', fontSize: 11 }} />
+                    <PolarRadiusAxis angle={30} stroke="#334155" tick={{ fill: '#64748B', fontSize: 10 }} />
+                    <Radar
+                      name="Eventos"
+                      dataKey="count"
+                      stroke={RADAR_COLOR}
+                      fill={RADAR_COLOR}
+                      fillOpacity={0.6}
+                    />
+                    <Tooltip
+                      formatter={(val) => [`${val} eventos`, 'Cantidad']}
+                      contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF', borderRadius: '12px' }}
+                    />
+                  </RadarChart>
                 </ResponsiveContainer>
               </div>
             </article>

@@ -71,10 +71,11 @@ export function useEventAnalytics(events = []) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // 4. Formatear categoryStats (Conteo agrupado por categoría)
+    // 4. Formatear y ordenar categoryStats (Top 6 categorías { name, count })
     const categoryStats = Object.entries(analyticsMap.categories)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
 
     return {
       pricingStats,
