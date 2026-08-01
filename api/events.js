@@ -97,16 +97,24 @@ function normalizeRecord(record, index) {
     ? String(record.hora_inicio).slice(0, 5)
     : "00:00";
 
+  // Título en variable para usarlo también en la URL dinámica
+  const title = record.nombre_actividad || record.nombre || "Actividad sin título";
+
+  // URL construida 100% desde el título — no se lee record.url bajo ninguna circunstancia.
+  // Esto garantiza que ningún link obsoleto del dataset llegue al frontend.
+  const url = `https://linda.buenosaires.gob.ar/agenda?q=${encodeURIComponent(title)}`;
+  console.log(`[events] URL final: ${url}`);
+
   return {
     id,
-    title:       record.nombre_actividad || record.nombre || "Actividad sin título",
+    title,
     description: record.descripcion || "",
     category:    classifyCategory(searchText),
     date:        record.fecha_inicio || record.fecha_desde || "",
     time,
     location:    normalizeLocation(record.barrio || record.domicilio || ""),
     address:     record.domicilio || "",
-    url:         record.url || `https://buenosaires.gob.ar/actividades/${id}`,
+    url,
     source:      "GCBA",
   };
 }
@@ -114,16 +122,16 @@ function normalizeRecord(record, index) {
 // ─── Mock con estructura real del GCBA (fallback) ─────────────────────────────
 
 const MOCK_RECORDS = [
-  { _id: 1001, nombre_actividad: "Concierto de Tango en el Obelisco", descripcion: "Gran show de tango al aire libre en el corazón de Buenos Aires. Artistas consagrados del género rioplatense.", categoria: "Música en vivo", subcategoria: "Tango", fecha_inicio: "2026-08-02", hora_inicio: "19:00", domicilio: "Av. 9 de Julio y Av. Corrientes", barrio: "Obelisco / Centro", url: "https://buenosaires.gob.ar/actividades/concierto-tango-obelisco" },
-  { _id: 1002, nombre_actividad: "Feria Gastronómica de Palermo", descripcion: "Más de 50 puestos con lo mejor de la cocina porteña, fusión latinoamericana y street food artesanal.", categoria: "Gastronomía", subcategoria: "Feria de comida", fecha_inicio: "2026-08-08", hora_inicio: "12:00", domicilio: "Av. del Libertador 2373", barrio: "Palermo", url: "https://buenosaires.gob.ar/actividades/feria-gastronomica-palermo" },
-  { _id: 1003, nombre_actividad: "Maratón Solidaria de la Ciudad", descripcion: "Carrera de 5 y 10 km a beneficio de comedores comunitarios de Buenos Aires.", categoria: "Deportivo", subcategoria: "Carrera", fecha_inicio: "2026-08-15", hora_inicio: "08:00", domicilio: "Av. Figueroa Alcorta 2461", barrio: "Palermo", url: "https://buenosaires.gob.ar/actividades/maraton-solidaria-gcba" },
-  { _id: 1004, nombre_actividad: "Exposición Arte Contemporáneo BA", descripcion: "Muestra de artistas plásticos emergentes. Pinturas, esculturas e instalaciones en diálogo con el espacio público.", categoria: "Artes visuales", subcategoria: "Exposición", fecha_inicio: "2026-08-05", hora_inicio: "14:00", domicilio: "Defensa 1575", barrio: "San Telmo", url: "https://buenosaires.gob.ar/actividades/exposicion-arte-contemporaneo" },
-  { _id: 1005, nombre_actividad: "Festival de Jazz en La Boca", descripcion: "Dos noches de jazz y blues al aire libre en el barrio de La Boca. Músicos locales e internacionales.", categoria: "Música en vivo", subcategoria: "Jazz", fecha_inicio: "2026-08-22", hora_inicio: "20:00", domicilio: "Caminito 100", barrio: "La Boca", url: "https://buenosaires.gob.ar/actividades/festival-jazz-la-boca" },
-  { _id: 1006, nombre_actividad: "Ciclo de Cine Gratuito en Parques", descripcion: "Proyecciones al aire libre de cine argentino clásico y contemporáneo. Ideal para toda la familia.", categoria: "Cine", subcategoria: "Ciclo de cine", fecha_inicio: "2026-08-12", hora_inicio: "21:00", domicilio: "Av. Infanta Isabel 410", barrio: "Palermo", url: "https://buenosaires.gob.ar/actividades/cine-parques-gcba" },
-  { _id: 1007, nombre_actividad: "Taller de Cocina Saludable", descripcion: "Taller gratuito de cocina plant-based. Dictado por nutricionistas y chefs especializados del GCBA.", categoria: "Gastronomía", subcategoria: "Taller culinario", fecha_inicio: "2026-08-19", hora_inicio: "10:30", domicilio: "Av. Corrientes 1530", barrio: "Obelisco / Centro", url: "https://buenosaires.gob.ar/actividades/taller-cocina-saludable" },
-  { _id: 1008, nombre_actividad: "Torneo de Ajedrez Abierto de la Ciudad", descripcion: "Torneo con sistema suizo de 7 rondas, abierto a todas las categorías y edades.", categoria: "Deportivo", subcategoria: "Ajedrez", fecha_inicio: "2026-08-29", hora_inicio: "10:00", domicilio: "Juramento 1400", barrio: "Belgrano", url: "https://buenosaires.gob.ar/actividades/torneo-ajedrez-ciudad" },
-  { _id: 1009, nombre_actividad: "Recital Rock Nacional en el Anfiteatro", descripcion: "Noche de rock argentino con las bandas emergentes más destacadas del año. Grilla de 4 bandas.", categoria: "Música en vivo", subcategoria: "Rock", fecha_inicio: "2026-08-28", hora_inicio: "19:00", domicilio: "Av. Sarmiento s/n, Parque Centenario", barrio: "Palermo", url: "https://buenosaires.gob.ar/actividades/recital-rock-anfiteatro" },
-  { _id: 1010, nombre_actividad: "Semana de la Danza Contemporánea", descripcion: "Funciones gratuitas de danza contemporánea, clásica y urbana. Compañías de todo el país.", categoria: "Danza", subcategoria: "Danza contemporánea", fecha_inicio: "2026-08-10", hora_inicio: "20:00", domicilio: "Av. Corrientes 1530", barrio: "Obelisco / Centro", url: "https://buenosaires.gob.ar/actividades/semana-danza-contemporanea" },
+  { _id: 1001, nombre_actividad: "Concierto de Tango en el Obelisco",       descripcion: "Gran show de tango al aire libre en el corazón de Buenos Aires. Artistas consagrados del género rioplatense.",   categoria: "Música en vivo",  subcategoria: "Tango",              fecha_inicio: "2026-08-02", hora_inicio: "19:00", domicilio: "Av. 9 de Julio y Av. Corrientes",      barrio: "Obelisco / Centro" },
+  { _id: 1002, nombre_actividad: "Feria Gastronómica de Palermo",           descripcion: "Más de 50 puestos con lo mejor de la cocina porteña, fusión latinoamericana y street food artesanal.",           categoria: "Gastronomía",    subcategoria: "Feria de comida",   fecha_inicio: "2026-08-08", hora_inicio: "12:00", domicilio: "Av. del Libertador 2373",            barrio: "Palermo"           },
+  { _id: 1003, nombre_actividad: "Maratón Solidaria de la Ciudad",          descripcion: "Carrera de 5 y 10 km a beneficio de comedores comunitarios de Buenos Aires.",                                     categoria: "Deportivo",      subcategoria: "Carrera",           fecha_inicio: "2026-08-15", hora_inicio: "08:00", domicilio: "Av. Figueroa Alcorta 2461",           barrio: "Palermo"           },
+  { _id: 1004, nombre_actividad: "Exposición Arte Contemporáneo BA",        descripcion: "Muestra de artistas plásticos emergentes. Pinturas, esculturas e instalaciones en diálogo con el espacio público.", categoria: "Artes visuales", subcategoria: "Exposición",        fecha_inicio: "2026-08-05", hora_inicio: "14:00", domicilio: "Defensa 1575",                        barrio: "San Telmo"         },
+  { _id: 1005, nombre_actividad: "Festival de Jazz en La Boca",             descripcion: "Dos noches de jazz y blues al aire libre en el barrio de La Boca. Músicos locales e internacionales.",             categoria: "Música en vivo",  subcategoria: "Jazz",              fecha_inicio: "2026-08-22", hora_inicio: "20:00", domicilio: "Caminito 100",                         barrio: "La Boca"           },
+  { _id: 1006, nombre_actividad: "Ciclo de Cine Gratuito en Parques",       descripcion: "Proyecciones al aire libre de cine argentino clásico y contemporáneo. Ideal para toda la familia.",               categoria: "Cine",           subcategoria: "Ciclo de cine",    fecha_inicio: "2026-08-12", hora_inicio: "21:00", domicilio: "Av. Infanta Isabel 410",              barrio: "Palermo"           },
+  { _id: 1007, nombre_actividad: "Taller de Cocina Saludable",              descripcion: "Taller gratuito de cocina plant-based. Dictado por nutricionistas y chefs especializados del GCBA.",              categoria: "Gastronomía",    subcategoria: "Taller culinario", fecha_inicio: "2026-08-19", hora_inicio: "10:30", domicilio: "Av. Corrientes 1530",                 barrio: "Obelisco / Centro" },
+  { _id: 1008, nombre_actividad: "Torneo de Ajedrez Abierto de la Ciudad",  descripcion: "Torneo con sistema suizo de 7 rondas, abierto a todas las categorías y edades.",                               categoria: "Deportivo",      subcategoria: "Ajedrez",           fecha_inicio: "2026-08-29", hora_inicio: "10:00", domicilio: "Juramento 1400",                      barrio: "Belgrano"          },
+  { _id: 1009, nombre_actividad: "Recital Rock Nacional en el Anfiteatro",  descripcion: "Noche de rock argentino con las bandas emergentes más destacadas del año. Grilla de 4 bandas.",                  categoria: "Música en vivo",  subcategoria: "Rock",              fecha_inicio: "2026-08-28", hora_inicio: "19:00", domicilio: "Av. Sarmiento s/n, Parque Centenario", barrio: "Palermo"           },
+  { _id: 1010, nombre_actividad: "Semana de la Danza Contemporánea",        descripcion: "Funciones gratuitas de danza contemporánea, clásica y urbana. Compañías de todo el país.",                       categoria: "Danza",          subcategoria: "Danza contemporánea", fecha_inicio: "2026-08-10", hora_inicio: "20:00", domicilio: "Av. Corrientes 1530",                 barrio: "Obelisco / Centro" },
 ];
 
 // ─── EXTRACT: Fetch al CKAN del GCBA ─────────────────────────────────────────
