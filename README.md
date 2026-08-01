@@ -8,7 +8,7 @@ EvenGo is a full-stack web application that aggregates, normalizes, and filters 
 
 ## 🚀 Live Demo
 
-**[evego.vercel.app](https://evego.vercel.app)** *(replace with your actual deployment URL)*
+**[evego.vercel.app](https://even-go.vercel.app)** *(replace with your actual deployment URL)*
 
 ---
 
