@@ -1,22 +1,23 @@
 // Vercel Serverless Function: GET /api/events
-// Devuelve eventos normalizados al frontend de EvenGo.
+// Fuente: API interna de Linda — portal cultural del GCBA
+// Endpoint: https://linda.buenosaires.gob.ar/api/frontend/events/filter
 //
-// NOTA DE ARQUITECTURA: Este archivo es AUTOCONTENIDO (sin imports de otros
-// archivos /api) para garantizar compatibilidad con vercel dev. La lógica ETL
-// completa vive en api/sync-gcba.js para uso independiente (cron/manual).
+// Schema de respuesta de Linda:
+// {
+//   filters:    { ... },
+//   events:     [ { id, title, description, imageUrl, fechaInicio, fechaFin,
+//                   precio, direccion, horario, etiquetas, ubicacion,
+//                   imagenes, pathAlias, barrio, slug, horarios, ... } ],
+//   pagination: { page, limit, total, totalPages }
+// }
 
 // ─── Configuración ────────────────────────────────────────────────────────────
 
-const GCBA_CKAN_BASE = "https://data.buenosaires.gob.ar/api/3/action";
+const LINDA_API = "https://linda.buenosaires.gob.ar/api/frontend/events/filter";
+const LINDA_BASE = "https://linda.buenosaires.gob.ar";
+const FETCH_LIMIT = 200;
 
-const GCBA_RESOURCE_IDS = [
-  "fe5ba957-f331-42b1-b3f4-a56b8f50268a",
-  "c225fdbb-f828-42d9-965d-5f3ee6d83481",
-  "e8e2051f-a1bc-4c45-8ece-8c107a1fcb82",
-  "423e35ec-489b-4703-8852-faf262c014e7",
-];
-
-// ─── Clasificador de categorías por palabras clave ────────────────────────────
+// ─── Clasificador de categorías (desde etiquetas de Linda) ────────────────────
 
 const CLASSIFICATION_RULES = [
   {
@@ -24,7 +25,7 @@ const CLASSIFICATION_RULES = [
     keywords: [
       "música", "musica", "concierto", "recital", "jazz", "rock", "tango",
       "cumbia", "folklore", "folclore", "orquesta", "banda", "cantante",
-      "festival musical", "show musical", "música en vivo", "musica en vivo",
+      "música y shows", "musica y shows", "show",
     ],
   },
   {
@@ -33,6 +34,7 @@ const CLASSIFICATION_RULES = [
       "deporte", "deportivo", "fútbol", "futbol", "tenis", "maratón", "maraton",
       "carrera", "atletismo", "natación", "natacion", "básquet", "basquet",
       "vóley", "voley", "torneo", "campeonato", "running", "ciclismo", "yoga",
+      "deportes", "fitness",
     ],
   },
   {
@@ -41,12 +43,19 @@ const CLASSIFICATION_RULES = [
       "gastronomía", "gastronomia", "gastronómica", "gastronomica",
       "feria de comida", "food", "culinaria", "culinario", "chef",
       "cocina", "degustación", "degustacion", "vinos", "cerveza artesanal",
+      "ferias y exposiciones",
     ],
   },
 ];
 
-function classifyCategory(text) {
-  const lower = (text || "")
+/**
+ * Clasifica el evento usando las etiquetas propias de Linda.
+ * @param {string[]} etiquetas - Array de tags del evento (ej: ["Música y Shows", "Entretenimiento"])
+ * @param {string}   tipoEvento - Campo tipoEvento del evento
+ * @returns {'Musical'|'Deportivo'|'Gastronomía'|'Cultural'}
+ */
+function classifyCategory(etiquetas = [], tipoEvento = "") {
+  const searchText = [...etiquetas, tipoEvento].join(" ")
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
@@ -54,7 +63,7 @@ function classifyCategory(text) {
   for (const rule of CLASSIFICATION_RULES) {
     const match = rule.keywords.some((kw) => {
       const kwNorm = kw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      return lower.includes(kwNorm);
+      return searchText.includes(kwNorm);
     });
     if (match) return rule.category;
   }
@@ -63,102 +72,195 @@ function classifyCategory(text) {
 
 // ─── Normalización de ubicación ───────────────────────────────────────────────
 
-function normalizeLocation(barrio) {
-  const b = (barrio || "").toLowerCase();
-  if (b.includes("palermo"))                                         return "Palermo";
-  if (b.includes("san telmo"))                                       return "San Telmo";
-  if (b.includes("quilmes"))                                         return "Quilmes";
-  if (b.includes("obelisco") || b.includes("centro") ||
-      b.includes("montserrat") || b.includes("retiro") ||
-      b.includes("corrientes") || b.includes("9 de julio"))         return "Obelisco / Centro";
-  if (b.includes("la boca") || b.includes("boca"))                  return "La Boca";
-  if (b.includes("belgrano"))                                        return "Belgrano";
-  return barrio || "Buenos Aires";
+const BARRIO_MAP = {
+  palermo:          "Palermo",
+  san_telmo:        "San Telmo",
+  quilmes:          "Quilmes",
+  montserrat:       "Obelisco / Centro",
+  san_nicolas:      "Obelisco / Centro",
+  retiro:           "Obelisco / Centro",
+  la_boca:          "La Boca",
+  belgrano:         "Belgrano",
+  caballito:        "Caballito",
+  almagro:          "Almagro",
+  villa_crespo:     "Villa Crespo",
+  recoleta:         "Recoleta",
+  puerto_madero:    "Puerto Madero",
+  san_cristobal:    "San Cristóbal",
+  floresta:         "Floresta",
+  flores:           "Flores",
+};
+
+/**
+ * Mapea el campo `barrio` (snake_case) de Linda a nombre legible de zona.
+ * @param {string} barrio - Ej: "villa_crespo", "palermo"
+ * @param {Object} ubicacion - Objeto ubicacion del evento
+ * @returns {string}
+ */
+function normalizeLocation(barrio = "", ubicacion = {}) {
+  if (BARRIO_MAP[barrio]) return BARRIO_MAP[barrio];
+  // Fallback al titulo de la ubicacion si existe
+  return ubicacion?.titulo || ubicacion?.direccion || "Buenos Aires";
 }
 
-// ─── Mapper: registro GCBA → schema EvenGo ───────────────────────────────────
+// ─── Strip HTML ───────────────────────────────────────────────────────────────
 
-function normalizeRecord(record, index) {
-  const searchText = [
-    record.nombre_actividad,
-    record.descripcion,
-    record.categoria,
-    record.subcategoria,
-  ]
-    .filter(Boolean)
-    .join(" ");
+/**
+ * Elimina tags HTML de la descripción para devolver texto plano al frontend.
+ * @param {string} html
+ * @returns {string}
+ */
+function stripHtml(html = "") {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const id =
-    record._id != null
-      ? String(record._id)
-      : `gcba-${Date.now()}-${index}`;
+// ─── Mapper: evento Linda → schema EvenGo ────────────────────────────────────
 
-  const time = record.hora_inicio
-    ? String(record.hora_inicio).slice(0, 5)
-    : "00:00";
+/**
+ * Transforma un evento de la API de Linda al schema EvenGo.
+ *
+ * Linda field      → EvenGo field
+ * ─────────────────────────────────────────────────────
+ * id               → id  (UUID nativo)
+ * title            → title
+ * description      → description  (HTML stripeado)
+ * imageUrl         → image  (fallback a imagenes[0])
+ * fechaInicio      → date  ("YYYY-MM-DD")
+ * horarios[0].hora → time  ("HH:MM")
+ * ubicacion+barrio → location
+ * direccion        → address
+ * etiquetas        → category  (clasificador propio)
+ * slug             → url  (linda.buenosaires.gob.ar/descubrir/:slug)
+ *
+ * @param {Object} event - Objeto crudo de la API de Linda
+ * @returns {import('./types').EvenGoEvent}
+ */
+function normalizeRecord(event) {
+  // ── ID ────────────────────────────────────────────────────────────────────
+  const id = event.id || String(event.drupalNid) || `linda-${Date.now()}`;
 
-  // Título en variable para usarlo también en la URL dinámica
-  const title = record.nombre_actividad || record.nombre || "Actividad sin título";
+  // ── Título ────────────────────────────────────────────────────────────────
+  const title = (event.title || "Actividad sin título").trim();
 
-  // URL construida 100% desde el título — no se lee record.url bajo ninguna circunstancia.
-  // Esto garantiza que ningún link obsoleto del dataset llegue al frontend.
-  const url = `https://linda.buenosaires.gob.ar/agenda?q=${encodeURIComponent(title)}`;
+  // ── Descripción: usa description principal, con fallback al primer componente
+  const rawDesc = event.description || event.componentes?.[0] || "";
+  const description = stripHtml(rawDesc).slice(0, 280); // máx 280 chars para tarjetas
+
+  // ── Imagen: imageUrl primero, luego primer elemento de imagenes[]
+  const image = event.imageUrl || event.imagenes?.[0] || "";
+
+  // ── Fecha: fechaInicio en ISO → extraer solo "YYYY-MM-DD"
+  const date = event.fechaInicio
+    ? event.fechaInicio.slice(0, 10)
+    : "";
+
+  // ── Hora: primer horario disponible, o extraer de fechaInicio (UTC→local)
+  let time = "00:00";
+  if (event.horarios?.length > 0 && event.horarios[0].hora) {
+    time = event.horarios[0].hora.slice(0, 5);
+  } else if (event.horario) {
+    time = String(event.horario).slice(0, 5);
+  } else if (event.fechaInicio) {
+    // Extraer hora del ISO string (viene en UTC, ajustar -3 para Argentina)
+    const utcHour = parseInt(event.fechaInicio.slice(11, 13), 10);
+    const localHour = ((utcHour - 3) + 24) % 24;
+    time = `${String(localHour).padStart(2, "0")}:${event.fechaInicio.slice(14, 16)}`;
+  }
+
+  // ── Ubicación y dirección ─────────────────────────────────────────────────
+  const location = normalizeLocation(event.barrio, event.ubicacion);
+  const address  = event.direccion || event.ubicacion?.direccion || location;
+
+  // ── URL: construida desde pathAlias (ruta canónica) o slug como fallback
+  // pathAlias viene como "/descubrir/slug-del-evento"
+  const url = event.pathAlias
+    ? `${LINDA_BASE}${event.pathAlias}`
+    : `${LINDA_BASE}/descubrir/${event.slug || id}`;
+
+  // ── Categoría ─────────────────────────────────────────────────────────────
+  const category = classifyCategory(event.etiquetas, event.tipoEvento);
+
+  // ── Log de trazabilidad (visible en logs de Vercel) ──────────────────────
   console.log(`[events] URL final: ${url}`);
 
   return {
     id,
     title,
-    description: record.descripcion || "",
-    category:    classifyCategory(searchText),
-    date:        record.fecha_inicio || record.fecha_desde || "",
+    description,
+    image,
+    date,
     time,
-    location:    normalizeLocation(record.barrio || record.domicilio || ""),
-    address:     record.domicilio || "",
+    location,
+    address,
     url,
-    source:      "GCBA",
+    category,
+    source: "LINDA",
+    // Campos extra pasados al frontend por si se necesitan en el futuro
+    precio:  event.acceso === "sin_costo" ? "Gratuito" : (event.precio || null),
+    barrio:  event.barrio || null,
   };
 }
 
-// ─── Mock con estructura real del GCBA (fallback) ─────────────────────────────
+// ─── EXTRACT: Fetch a la API de Linda ────────────────────────────────────────
+
+/**
+ * Obtiene los eventos desde la nueva API de Linda (portal cultural GCBA).
+ * Wrapper de respuesta: { events: [...], pagination: {...}, filters: {...} }
+ *
+ * @returns {Promise<{ records: Object[], live: boolean }>}
+ */
+async function extractFromLinda() {
+  const url = `${LINDA_API}?limit=${FETCH_LIMIT}`;
+
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Linda API HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  // El wrapper real de Linda es { events: [...], pagination, filters }
+  const records =
+    data.events   ??  // estructura real confirmada
+    data.items    ??  // por si cambia en el futuro
+    data.data     ??  // fallback genérico
+    [];
+
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new Error("Linda API respondió sin eventos en el array");
+  }
+
+  console.log(`[events] Linda live: ${records.length} eventos (total API: ${data.pagination?.total ?? "?"})`);
+  return { records, live: true };
+}
+
+// ─── Mock con estructura real de Linda (fallback cuando la API falla) ─────────
+// Los mocks replican exactamente los campos de la API de Linda para que
+// normalizeRecord() los procese de forma idéntica a los datos en vivo.
 
 const MOCK_RECORDS = [
-  { _id: 1001, nombre_actividad: "Concierto de Tango en el Obelisco",       descripcion: "Gran show de tango al aire libre en el corazón de Buenos Aires. Artistas consagrados del género rioplatense.",   categoria: "Música en vivo",  subcategoria: "Tango",              fecha_inicio: "2026-08-02", hora_inicio: "19:00", domicilio: "Av. 9 de Julio y Av. Corrientes",      barrio: "Obelisco / Centro" },
-  { _id: 1002, nombre_actividad: "Feria Gastronómica de Palermo",           descripcion: "Más de 50 puestos con lo mejor de la cocina porteña, fusión latinoamericana y street food artesanal.",           categoria: "Gastronomía",    subcategoria: "Feria de comida",   fecha_inicio: "2026-08-08", hora_inicio: "12:00", domicilio: "Av. del Libertador 2373",            barrio: "Palermo"           },
-  { _id: 1003, nombre_actividad: "Maratón Solidaria de la Ciudad",          descripcion: "Carrera de 5 y 10 km a beneficio de comedores comunitarios de Buenos Aires.",                                     categoria: "Deportivo",      subcategoria: "Carrera",           fecha_inicio: "2026-08-15", hora_inicio: "08:00", domicilio: "Av. Figueroa Alcorta 2461",           barrio: "Palermo"           },
-  { _id: 1004, nombre_actividad: "Exposición Arte Contemporáneo BA",        descripcion: "Muestra de artistas plásticos emergentes. Pinturas, esculturas e instalaciones en diálogo con el espacio público.", categoria: "Artes visuales", subcategoria: "Exposición",        fecha_inicio: "2026-08-05", hora_inicio: "14:00", domicilio: "Defensa 1575",                        barrio: "San Telmo"         },
-  { _id: 1005, nombre_actividad: "Festival de Jazz en La Boca",             descripcion: "Dos noches de jazz y blues al aire libre en el barrio de La Boca. Músicos locales e internacionales.",             categoria: "Música en vivo",  subcategoria: "Jazz",              fecha_inicio: "2026-08-22", hora_inicio: "20:00", domicilio: "Caminito 100",                         barrio: "La Boca"           },
-  { _id: 1006, nombre_actividad: "Ciclo de Cine Gratuito en Parques",       descripcion: "Proyecciones al aire libre de cine argentino clásico y contemporáneo. Ideal para toda la familia.",               categoria: "Cine",           subcategoria: "Ciclo de cine",    fecha_inicio: "2026-08-12", hora_inicio: "21:00", domicilio: "Av. Infanta Isabel 410",              barrio: "Palermo"           },
-  { _id: 1007, nombre_actividad: "Taller de Cocina Saludable",              descripcion: "Taller gratuito de cocina plant-based. Dictado por nutricionistas y chefs especializados del GCBA.",              categoria: "Gastronomía",    subcategoria: "Taller culinario", fecha_inicio: "2026-08-19", hora_inicio: "10:30", domicilio: "Av. Corrientes 1530",                 barrio: "Obelisco / Centro" },
-  { _id: 1008, nombre_actividad: "Torneo de Ajedrez Abierto de la Ciudad",  descripcion: "Torneo con sistema suizo de 7 rondas, abierto a todas las categorías y edades.",                               categoria: "Deportivo",      subcategoria: "Ajedrez",           fecha_inicio: "2026-08-29", hora_inicio: "10:00", domicilio: "Juramento 1400",                      barrio: "Belgrano"          },
-  { _id: 1009, nombre_actividad: "Recital Rock Nacional en el Anfiteatro",  descripcion: "Noche de rock argentino con las bandas emergentes más destacadas del año. Grilla de 4 bandas.",                  categoria: "Música en vivo",  subcategoria: "Rock",              fecha_inicio: "2026-08-28", hora_inicio: "19:00", domicilio: "Av. Sarmiento s/n, Parque Centenario", barrio: "Palermo"           },
-  { _id: 1010, nombre_actividad: "Semana de la Danza Contemporánea",        descripcion: "Funciones gratuitas de danza contemporánea, clásica y urbana. Compañías de todo el país.",                       categoria: "Danza",          subcategoria: "Danza contemporánea", fecha_inicio: "2026-08-10", hora_inicio: "20:00", domicilio: "Av. Corrientes 1530",                 barrio: "Obelisco / Centro" },
+  { id: "mock-1001", title: "Concierto de Tango en el Obelisco",       description: "<p>Gran show de tango al aire libre en el corazón de Buenos Aires. Artistas consagrados del género rioplatense.</p>",   imageUrl: "", fechaInicio: "2026-08-02T22:00:00.000Z", direccion: "Av. 9 de Julio y Av. Corrientes", barrio: "san_nicolas", etiquetas: ["Música y Shows"],              tipoEvento: "musica",       slug: "concierto-tango-obelisco",       pathAlias: "/descubrir/concierto-tango-obelisco",       horarios: [{ dia: "sábado",   hora: "19:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Obelisco",          direccion: "Av. 9 de Julio" } },
+  { id: "mock-1002", title: "Feria Gastronómica de Palermo",           description: "<p>Más de 50 puestos con lo mejor de la cocina porteña, fusión latinoamericana y street food artesanal.</p>",           imageUrl: "", fechaInicio: "2026-08-08T15:00:00.000Z", direccion: "Av. del Libertador 2373",        barrio: "palermo",    etiquetas: ["Gastronomía", "Ferias y exposiciones"], tipoEvento: "gastronomia",  slug: "feria-gastronomica-palermo",     pathAlias: "/descubrir/feria-gastronomica-palermo",     horarios: [{ dia: "viernes",  hora: "12:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Palermo",           direccion: "Av. del Libertador 2373" } },
+  { id: "mock-1003", title: "Maratón Solidaria de la Ciudad",          description: "<p>Carrera de 5 y 10 km a beneficio de comedores comunitarios de Buenos Aires. Abierta a todos los niveles.</p>",       imageUrl: "", fechaInicio: "2026-08-15T11:00:00.000Z", direccion: "Av. Figueroa Alcorta 2461",      barrio: "palermo",    etiquetas: ["Deportes"],                             tipoEvento: "deportes",     slug: "maraton-solidaria-ciudad",       pathAlias: "/descubrir/maraton-solidaria-ciudad",       horarios: [{ dia: "sábado",   hora: "08:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Campo Argentino de Polo", direccion: "Av. Figueroa Alcorta 2461" } },
+  { id: "mock-1004", title: "Exposición Arte Contemporáneo BA",        description: "<p>Muestra de artistas plásticos emergentes de Buenos Aires. Pinturas, esculturas e instalaciones.</p>",               imageUrl: "", fechaInicio: "2026-08-05T17:00:00.000Z", direccion: "Defensa 1575",                   barrio: "san_telmo",  etiquetas: ["Arte"],                                 tipoEvento: "arte",         slug: "exposicion-arte-contemporaneo-ba",pathAlias: "/descubrir/exposicion-arte-contemporaneo-ba",horarios: [{ dia: "martes",   hora: "14:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Centro Cultural San Telmo", direccion: "Defensa 1575" } },
+  { id: "mock-1005", title: "Festival de Jazz en La Boca",             description: "<p>Dos noches de jazz y blues al aire libre en La Boca. Músicos locales e internacionales en escenas simultáneas.</p>", imageUrl: "", fechaInicio: "2026-08-22T23:00:00.000Z", direccion: "Caminito 100",                   barrio: "la_boca",    etiquetas: ["Música y Shows"],              tipoEvento: "musica",       slug: "festival-jazz-la-boca",          pathAlias: "/descubrir/festival-jazz-la-boca",          horarios: [{ dia: "viernes",  hora: "20:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Caminito",          direccion: "Caminito 100" } },
+  { id: "mock-1006", title: "Ciclo de Cine Gratuito en Parques",       description: "<p>Proyecciones al aire libre de cine argentino clásico y contemporáneo. Ideal para toda la familia.</p>",              imageUrl: "", fechaInicio: "2026-08-12T00:00:00.000Z", direccion: "Av. Infanta Isabel 410",         barrio: "palermo",    etiquetas: ["Cine"],                                 tipoEvento: "cine",         slug: "cine-gratuito-parques",          pathAlias: "/descubrir/cine-gratuito-parques",          horarios: [{ dia: "martes",   hora: "21:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Parque Tres de Febrero",    direccion: "Av. Infanta Isabel 410" } },
+  { id: "mock-1007", title: "Taller de Cocina Saludable",              description: "<p>Taller gratuito de cocina plant-based. Dictado por nutricionistas y chefs especializados del GCBA.</p>",            imageUrl: "", fechaInicio: "2026-08-19T13:30:00.000Z", direccion: "Av. Corrientes 1530",            barrio: "san_nicolas",etiquetas: ["Gastronomía", "Talleres"],              tipoEvento: "gastronomia",  slug: "taller-cocina-saludable",        pathAlias: "/descubrir/taller-cocina-saludable",        horarios: [{ dia: "miércoles",hora: "10:30" }], acceso: "sin_costo",        ubicacion: { titulo: "Centro Cultural San Martín", direccion: "Av. Corrientes 1530" } },
+  { id: "mock-1008", title: "Torneo de Ajedrez Abierto de la Ciudad",  description: "<p>Torneo con sistema suizo de 7 rondas, abierto a todas las categorías y edades.</p>",                                 imageUrl: "", fechaInicio: "2026-08-29T13:00:00.000Z", direccion: "Juramento 1400",                 barrio: "belgrano",   etiquetas: ["Deportes"],                             tipoEvento: "deportes",     slug: "torneo-ajedrez-ciudad",          pathAlias: "/descubrir/torneo-ajedrez-ciudad",          horarios: [{ dia: "sábado",   hora: "10:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Club Belgrano",     direccion: "Juramento 1400" } },
+  { id: "mock-1009", title: "Recital Rock Nacional en el Anfiteatro",  description: "<p>Noche de rock argentino con las bandas emergentes más destacadas del año. Grilla de 4 bandas.</p>",                  imageUrl: "", fechaInicio: "2026-08-28T22:00:00.000Z", direccion: "Av. Sarmiento s/n",              barrio: "palermo",    etiquetas: ["Música y Shows"],              tipoEvento: "musica",       slug: "recital-rock-anfiteatro",        pathAlias: "/descubrir/recital-rock-anfiteatro",        horarios: [{ dia: "viernes",  hora: "19:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Anfiteatro Parque Centenario", direccion: "Av. Sarmiento s/n" } },
+  { id: "mock-1010", title: "Semana de la Danza Contemporánea",        description: "<p>Funciones gratuitas de danza contemporánea, clásica y urbana. Compañías de todo el país en Buenos Aires.</p>",      imageUrl: "", fechaInicio: "2026-08-10T23:00:00.000Z", direccion: "Av. Corrientes 1530",            barrio: "san_nicolas",etiquetas: ["Danza"],                                tipoEvento: "danza",        slug: "semana-danza-contemporanea",     pathAlias: "/descubrir/semana-danza-contemporanea",     horarios: [{ dia: "lunes",    hora: "20:00" }], acceso: "sin_costo",        ubicacion: { titulo: "Teatro San Martín", direccion: "Av. Corrientes 1530" } },
 ];
-
-// ─── EXTRACT: Fetch al CKAN del GCBA ─────────────────────────────────────────
-
-async function extractFromGCBA() {
-  const errors = [];
-  for (const resourceId of GCBA_RESOURCE_IDS) {
-    try {
-      const url = `${GCBA_CKAN_BASE}/datastore_search?resource_id=${resourceId}&limit=50`;
-      const response = await fetch(url, {
-        headers: { Accept: "application/json" },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      if (!data.success) throw new Error(`CKAN: ${JSON.stringify(data.error)}`);
-      const records = data.result?.records ?? [];
-      if (records.length === 0) throw new Error("Dataset sin registros");
-      console.log(`[events] GCBA live: ${records.length} registros (resource: ${resourceId})`);
-      return { records, live: true };
-    } catch (err) {
-      errors.push(`${resourceId.slice(0, 8)}: ${err.message}`);
-    }
-  }
-  console.warn(`[events] GCBA no disponible (${errors.join(" | ")}). Usando mock.`);
-  return { records: MOCK_RECORDS, live: false };
-}
 
 // ─── Handler principal ────────────────────────────────────────────────────────
 
@@ -168,25 +270,30 @@ export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "GET")    return res.status(405).json({ error: "Method Not Allowed" });
 
   try {
-    const { records, live } = await extractFromGCBA();
+    let records, live;
+
+    try {
+      ({ records, live } = await extractFromLinda());
+    } catch (apiErr) {
+      console.warn(`[events] Linda API no disponible (${apiErr.message}). Usando mock.`);
+      records = MOCK_RECORDS;
+      live    = false;
+    }
+
     const events = records.map(normalizeRecord);
 
     return res.status(200).json({
       events,
       total:     events.length,
-      source:    "GCBA",
+      source:    "LINDA",
       live,
       timestamp: new Date().toISOString(),
     });
+
   } catch (err) {
     console.error("[events] Error crítico:", err.message);
     return res.status(503).json({
