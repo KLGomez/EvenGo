@@ -1,8 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useEventContext } from '../hooks/useEventContext';
 
 /**
- * ChatBot: Asistente Virtual Flotante de EvenGo con Google Gemini
+ * Componentes de estilizado Tailwind para ReactMarkdown
+ */
+const markdownComponents = {
+  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc ml-5 mb-2 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal ml-5 mb-2 space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="mb-1">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+  h3: ({ children }) => <h3 className="text-base font-bold text-white mt-3 mb-1.5">{children}</h3>,
+  h4: ({ children }) => <h4 className="text-sm font-bold text-white mt-2 mb-1">{children}</h4>,
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-indigo-300 underline hover:text-indigo-200 transition-colors"
+    >
+      {children}
+    </a>
+  ),
+};
+
+/**
+ * ChatBot: Asistente Virtual Flotante de EvenGo con Google Gemini & ReactMarkdown
  */
 export default function ChatBot() {
   const { filteredEvents } = useEventContext();
@@ -14,7 +38,7 @@ export default function ChatBot() {
     {
       id: 'welcome',
       sender: 'bot',
-      text: '¡Hola! 👋 Soy el asistente virtual de EvenGo. ¿Buscas algún plan cultural en Buenos Aires? Dime qué te gustaría hacer y te ayudaré a encontrar los mejores eventos.',
+      text: '¡Hola! 👋 Soy el asistente virtual de **EvenGo**. ¿Buscas algún plan cultural en Buenos Aires? Dime qué te gustaría hacer y te recomendaré las mejores opciones.',
     },
   ]);
 
@@ -45,7 +69,7 @@ export default function ChatBot() {
     setIsLoading(true);
 
     try {
-      // Optimización de Contexto: Recorte a máximo 20 eventos y extracción de campos esenciales
+      // Optimización de Contexto: Recorte a máximo 20 eventos y selección de campos esenciales
       const contextData = (filteredEvents || []).slice(0, 20).map((event) => ({
         title: event.title,
         category: event.category,
@@ -56,7 +80,7 @@ export default function ChatBot() {
         description: event.description || '',
       }));
 
-      // Petición POST a la Serverless Function /api/chat con Content-Type application/json
+      // Petición POST a la Serverless Function /api/chat
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -86,7 +110,7 @@ export default function ChatBot() {
       const errorMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: `⚠️ Ocurrió un error al consultar con la IA (${error.message}). Por favor, verifica la configuración de GEMINI_API_KEY en Vercel.`,
+        text: `⚠️ Ocurrió un error al consultar con la IA (${error.message}). Por favor, intenta nuevamente más tarde.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -150,13 +174,19 @@ export default function ChatBot() {
                 }`}
               >
                 <div
-                  className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                  className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
                     msg.sender === 'user'
                       ? 'bg-indigo-600 text-white rounded-br-xs shadow-md shadow-indigo-600/20'
                       : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-xs shadow-md'
                   }`}
                 >
-                  {msg.text}
+                  {msg.sender === 'bot' ? (
+                    <ReactMarkdown components={markdownComponents}>
+                      {msg.text}
+                    </ReactMarkdown>
+                  ) : (
+                    <span className="whitespace-pre-wrap">{msg.text}</span>
+                  )}
                 </div>
                 <span className="text-[10px] text-slate-500 mt-1 px-1">
                   {msg.sender === 'user' ? 'Tú' : 'EvenGo AI'}
