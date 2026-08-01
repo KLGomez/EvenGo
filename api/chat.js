@@ -36,14 +36,18 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El campo "message" es requerido y no puede estar vacío.' });
     }
 
+    if (!apiKey.startsWith('AIzaSy')) {
+      console.warn('[api/chat] Advertencia: GEMINI_API_KEY no parece ser una clave estándar de Google AI Studio (suelen comenzar con "AIzaSy..."). Verifique su origen en https://aistudio.google.com/app/apikey.');
+    }
+
     // Inicializar SDK de Google Generative AI
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const systemInstruction = `Eres el asistente virtual de EvenGo, experto en la agenda cultural de Buenos Aires. Basándote ÚNICAMENTE en la siguiente lista de eventos en formato JSON, responde a la consulta del usuario recomendando el mejor plan. Sé amable, conciso y formatea tu respuesta.`;
 
-    // Inicializar el modelo gemini-1.5-flash-latest con la instrucción del sistema
+    // Inicializar el modelo activo gemini-flash-latest
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash-latest',
+      model: 'gemini-flash-latest',
       systemInstruction: systemInstruction,
     });
 
