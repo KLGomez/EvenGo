@@ -41,9 +41,9 @@ export default async function handler(req, res) {
 
     const systemInstruction = `Eres el asistente virtual de EvenGo, experto en la agenda cultural de Buenos Aires. Basándote ÚNICAMENTE en la siguiente lista de eventos en formato JSON, responde a la consulta del usuario recomendando el mejor plan. Sé amable, conciso y formatea tu respuesta.`;
 
-    // Inicializar el modelo gemini-1.5-flash con la instrucción del sistema
+    // Inicializar el modelo gemini-1.5-flash-latest con la instrucción del sistema
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-latest',
       systemInstruction: systemInstruction,
     });
 
