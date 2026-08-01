@@ -38,6 +38,13 @@ export default function EventCard({ event }) {
   const calendarUrl = buildGoogleCalendarUrl(event);
   const formattedDate = formatDate(event.date);
 
+  const isFree = (price) => {
+    if (price == null) return false;
+    const p = String(price).toLowerCase().trim();
+    return p === '0' || p === 'gratis' || p === 'gratuito' || p === 'sin cargo';
+  };
+  const eventIsFree = isFree(event.price);
+
   return (
     <article
       className={`group relative flex flex-col rounded-2xl overflow-hidden
@@ -50,13 +57,24 @@ export default function EventCard({ event }) {
 
       {/* Contenido de la tarjeta */}
       <div className="flex flex-col flex-1 p-5 gap-4">
-        {/* Header: categoría + ícono */}
+        {/* Header: categoría + ícono + badge de precio */}
         <div className="flex items-center justify-between">
-          <span
-            className={`text-xs font-semibold px-3 py-1 rounded-full ${style.pill}`}
-          >
-            {style.icon} {event.category}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-xs font-semibold px-3 py-1 rounded-full ${style.pill}`}
+            >
+              {style.icon} {event.category}
+            </span>
+            <span
+              className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md ${
+                eventIsFree
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+              }`}
+            >
+              {eventIsFree ? 'Gratis' : 'De pago'}
+            </span>
+          </div>
           <span className="text-xs text-slate-400 font-medium">{event.time} hs</span>
         </div>
 

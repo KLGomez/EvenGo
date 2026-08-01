@@ -91,6 +91,28 @@ export default function FilterPanel({ filters, onFilterChange, onReset, resultCo
           </select>
         </div>
 
+        {/* Filtro de Precio */}
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="price-filter"
+            className="text-xs font-semibold text-slate-400 uppercase tracking-wider"
+          >
+            Precio
+          </label>
+          <select
+            id="price-filter"
+            value={filters.price || 'Todos'}
+            onChange={(e) => onFilterChange('price', e.target.value)}
+            className="w-full bg-slate-900 text-slate-300 border border-white/10
+              rounded-xl px-4 py-2.5 text-sm appearance-none cursor-pointer
+              focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+          >
+            <option value="Todos">Todos los precios</option>
+            <option value="Gratis">Gratis</option>
+            <option value="Pago">De pago</option>
+          </select>
+        </div>
+
         {/* Filtro de Fecha */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">

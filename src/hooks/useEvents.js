@@ -31,6 +31,7 @@ export function useEvents() {
     location: 'Todas las zonas',
     dateRange: 'all',
     searchText: '',
+    price: 'Todos',
   });
 
   // ── Fetch de eventos reales ──────────────────────────────────────────────
@@ -81,7 +82,20 @@ export function useEvents() {
         event.title.toLowerCase().includes(filters.searchText.toLowerCase()) ||
         event.description.toLowerCase().includes(filters.searchText.toLowerCase());
 
-      return matchesCategory && matchesLocation && matchesDate && matchesSearch;
+      const isFree = (price) => {
+        if (price == null) return false;
+        const p = String(price).toLowerCase().trim();
+        return p === '0' || p === 'gratis' || p === 'gratuito' || p === 'sin cargo';
+      };
+
+      const eventIsFree = isFree(event.price);
+
+      const matchesPrice =
+        filters.price === 'Todos' ||
+        (filters.price === 'Gratis' && eventIsFree) ||
+        (filters.price === 'Pago' && !eventIsFree);
+
+      return matchesCategory && matchesLocation && matchesDate && matchesSearch && matchesPrice;
     });
   }, [events, filters]);
 
@@ -96,6 +110,7 @@ export function useEvents() {
       location: 'Todas las zonas',
       dateRange: 'all',
       searchText: '',
+      price: 'Todos',
     });
   };
 
