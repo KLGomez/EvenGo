@@ -3,12 +3,12 @@ import { useMemo } from 'react';
 /**
  * Custom Hook: useEventAnalytics
  * 
- * Procesa el array de eventos de EvenGo para calcular métricas clave de negocio.
+ * Procesa el array de eventos de EvenGo para calcular métricas clave de negocio y KPIs.
  * Utiliza .reduce() para agrupar y transformar los datos en un solo pase lineal O(N),
  * y useMemo para optimizar el rendimiento evitando recálculos innecesarios.
  * 
- * @param {Array} events - Array de objetos EvenGoEvent { id, title, category, location, precio }
- * @returns {{ pricingStats: Array, topLocations: Array, categoryStats: Array }}
+ * @param {Array} events - Array de objetos EvenGoEvent { id, title, category, location, precio, date, startDate, fecha }
+ * @returns {{ pricingStats: Array, topLocations: Array, categoryStats: Array, kpis: Object }}
  */
 export function useEventAnalytics(events = []) {
   return useMemo(() => {
@@ -21,6 +21,12 @@ export function useEventAnalytics(events = []) {
         ],
         topLocations: [],
         categoryStats: [],
+        kpis: {
+          totalEvents: 0,
+          topNeighborhood: 'Sin datos',
+          freePercentage: '0%',
+          nextEvent: 'No hay próximos',
+        },
       };
     }
 
@@ -77,10 +83,42 @@ export function useEventAnalytics(events = []) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
+    // 5. Cálculo de Indicadores Clave (KPIs)
+    const totalEvents = events.length;
+
+    // Barrio líder (posición 0 de topLocations)
+    const topNeighborhood = topLocations.length > 0 ? topLocations[0].name : 'Sin datos';
+
+    // Porcentaje exacto de eventos gratuitos sobre el total
+    const freeCount = analyticsMap.pricing.Gratuito;
+    const freePercentage = totalEvents > 0 ? `${Math.round((freeCount / totalEvents) * 100)}%` : '0%';
+
+    // Próximo evento futuro respecto a new Date()
+    const now = new Date().getTime();
+    const futureEvents = events
+      .map((e) => {
+        const rawDate = e.startDate || e.date || e.fecha;
+        if (!rawDate) return null;
+        const parsedDate = new Date(rawDate);
+        return isNaN(parsedDate.getTime()) ? null : { title: e.title, time: parsedDate.getTime() };
+      })
+      .filter((e) => e !== null && e.time >= now)
+      .sort((a, b) => a.time - b.time);
+
+    const nextEvent = futureEvents.length > 0 ? futureEvents[0].title : 'No hay próximos';
+
+    const kpis = {
+      totalEvents,
+      topNeighborhood,
+      freePercentage,
+      nextEvent,
+    };
+
     return {
       pricingStats,
       topLocations,
       categoryStats,
+      kpis,
     };
   }, [events]);
 }

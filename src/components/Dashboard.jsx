@@ -34,14 +34,14 @@ const RADAR_COLOR = '#8B5CF6'; // Violeta principal para el radar temático
  * Componente Visual: Dashboard Cultural de EvenGo (Vista Inmersiva /radar-cultural)
  * 
  * Consume el contexto global de eventos y el motor analítico `useEventAnalytics`
- * para renderizar métricas procesadas en gráficos interactivos con Recharts.
+ * para renderizar indicadores KPI y gráficos interactivos con Recharts.
  */
 export function Dashboard() {
   // Consumo del estado global para reutilizar la data en memoria sin re-fetchear
   const { events, loading, error, usingMocks, retry } = useEventContext();
 
   // Invocación del Motor Analítico
-  const { pricingStats, topLocations, categoryStats } = useEventAnalytics(events);
+  const { pricingStats, topLocations, categoryStats, kpis } = useEventAnalytics(events);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-20">
@@ -89,120 +89,175 @@ export function Dashboard() {
             </button>
           </div>
         ) : (
-          /* Grid responsivo de gráficos */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
-            {/* ── 1. Gráfico de Torta: Gratuitos vs Pagos ────────────────── */}
-            <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl">
-              <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                🏷️ Distribución por Precio
-              </h2>
-              <p className="text-xs text-slate-400 mb-4">
-                Proporción de eventos culturales de acceso libre vs entrada paga
-              </p>
+          <>
+            {/* ── Fila de Indicadores Clave (KPIs) ───────────────────────── */}
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              {/* Card 1: Total Eventos */}
+              <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl shadow-lg flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm font-medium">Total Eventos</span>
+                  <span className="text-xl">🎟️</span>
+                </div>
+                <span className="text-2xl font-bold text-white tracking-tight">
+                  {kpis.totalEvents}
+                </span>
+              </div>
 
-              <div className="w-full h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pricingStats}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={95}
-                      innerRadius={55}
-                      paddingAngle={6}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              {/* Card 2: Barrio Líder */}
+              <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl shadow-lg flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm font-medium">Barrio Líder</span>
+                  <span className="text-xl">📍</span>
+                </div>
+                <span
+                  className="text-2xl font-bold text-white tracking-tight truncate"
+                  title={kpis.topNeighborhood}
+                >
+                  {kpis.topNeighborhood}
+                </span>
+              </div>
+
+              {/* Card 3: % Eventos Gratis */}
+              <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl shadow-lg flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm font-medium">Eventos Gratis</span>
+                  <span className="text-xl">💰</span>
+                </div>
+                <span className="text-2xl font-bold text-white tracking-tight">
+                  {kpis.freePercentage}
+                </span>
+              </div>
+
+              {/* Card 4: Próximo Evento */}
+              <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-5 rounded-2xl shadow-lg flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm font-medium">Próximo Evento</span>
+                  <span className="text-xl">⏰</span>
+                </div>
+                <span
+                  className="text-xl font-bold text-white tracking-tight truncate"
+                  title={kpis.nextEvent}
+                >
+                  {kpis.nextEvent}
+                </span>
+              </div>
+            </section>
+
+            {/* ── Grid Responsivo de Gráficos Recharts ───────────────────── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              
+              {/* 1. PieChart: Gratuitos vs Pagos */}
+              <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl">
+                <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                  🏷️ Distribución por Precio
+                </h2>
+                <p className="text-xs text-slate-400 mb-4">
+                  Proporción de eventos culturales de acceso libre vs entrada paga
+                </p>
+
+                <div className="w-full h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pricingStats}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={95}
+                        innerRadius={55}
+                        paddingAngle={6}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {pricingStats.map((entry) => (
+                          <Cell
+                            key={`cell-${entry.name}`}
+                            fill={PRICING_COLORS[entry.name] || '#9CA3AF'}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(val) => [`${val} eventos`, 'Total']}
+                        contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF', borderRadius: '12px' }}
+                      />
+                      <Legend verticalAlign="bottom" height={36} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </article>
+
+              {/* 2. BarChart: Top 5 Barrios */}
+              <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl">
+                <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                  📍 Top 5 Barrios Culturales
+                </h2>
+                <p className="text-xs text-slate-400 mb-4">
+                  Barrios con mayor concentración de oferta de eventos
+                </p>
+
+                <div className="w-full h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={topLocations}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 25 }}
                     >
-                      {pricingStats.map((entry) => (
-                        <Cell
-                          key={`cell-${entry.name}`}
-                          fill={PRICING_COLORS[entry.name] || '#9CA3AF'}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(val) => [`${val} eventos`, 'Total']}
-                      contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF', borderRadius: '12px' }}
-                    />
-                    <Legend verticalAlign="bottom" height={36} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </article>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: '#94A3B8', fontSize: 12 }}
+                        interval={0}
+                        angle={-15}
+                        textAnchor="end"
+                      />
+                      <YAxis allowDecimals={false} tick={{ fill: '#94A3B8' }} />
+                      <Tooltip
+                        formatter={(val) => [`${val} eventos`, 'Eventos']}
+                        contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF', borderRadius: '12px' }}
+                      />
+                      <Bar
+                        dataKey="count"
+                        name="Eventos"
+                        fill={BAR_COLOR}
+                        radius={[8, 8, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </article>
 
-            {/* ── 2. Gráfico de Barras: Top 5 Barrios ────────────────────── */}
-            <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl">
-              <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                📍 Top 5 Barrios Culturales
-              </h2>
-              <p className="text-xs text-slate-400 mb-4">
-                Barrios con mayor concentración de oferta de eventos
-              </p>
+              {/* 3. RadarChart: Ecosistema Temático */}
+              <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl col-span-1 md:col-span-2 lg:col-span-1">
+                <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                  🕸️ Ecosistema Temático
+                </h2>
+                <p className="text-xs text-slate-400 mb-4">
+                  Distribución de eventos por las 6 principales categorías
+                </p>
 
-              <div className="w-full h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={topLocations}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 25 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: '#94A3B8', fontSize: 12 }}
-                      interval={0}
-                      angle={-15}
-                      textAnchor="end"
-                    />
-                    <YAxis allowDecimals={false} tick={{ fill: '#94A3B8' }} />
-                    <Tooltip
-                      formatter={(val) => [`${val} eventos`, 'Eventos']}
-                      contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF', borderRadius: '12px' }}
-                    />
-                    <Bar
-                      dataKey="count"
-                      name="Eventos"
-                      fill={BAR_COLOR}
-                      radius={[8, 8, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </article>
+                <div className="w-full h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="75%" data={categoryStats}>
+                      <PolarGrid stroke="#334155" />
+                      <PolarAngleAxis dataKey="name" tick={{ fill: '#94A3B8', fontSize: 11 }} />
+                      <PolarRadiusAxis angle={30} stroke="#334155" tick={{ fill: '#64748B', fontSize: 10 }} />
+                      <Radar
+                        name="Eventos"
+                        dataKey="count"
+                        stroke={RADAR_COLOR}
+                        fill={RADAR_COLOR}
+                        fillOpacity={0.6}
+                      />
+                      <Tooltip
+                        formatter={(val) => [`${val} eventos`, 'Cantidad']}
+                        contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF', borderRadius: '12px' }}
+                      />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </article>
 
-            {/* ── 3. Gráfico de Radar: Ecosistema Temático ────────────────── */}
-            <article className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl shadow-xl col-span-1 md:col-span-2 lg:col-span-1">
-              <h2 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                🕸️ Ecosistema Temático
-              </h2>
-              <p className="text-xs text-slate-400 mb-4">
-                Distribución de eventos por las 6 principales categorías
-              </p>
-
-              <div className="w-full h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="75%" data={categoryStats}>
-                    <PolarGrid stroke="#334155" />
-                    <PolarAngleAxis dataKey="name" tick={{ fill: '#94A3B8', fontSize: 11 }} />
-                    <PolarRadiusAxis angle={30} stroke="#334155" tick={{ fill: '#64748B', fontSize: 10 }} />
-                    <Radar
-                      name="Eventos"
-                      dataKey="count"
-                      stroke={RADAR_COLOR}
-                      fill={RADAR_COLOR}
-                      fillOpacity={0.6}
-                    />
-                    <Tooltip
-                      formatter={(val) => [`${val} eventos`, 'Cantidad']}
-                      contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#FFF', borderRadius: '12px' }}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            </article>
-
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>
