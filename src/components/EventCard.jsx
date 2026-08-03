@@ -43,7 +43,7 @@ export default function EventCard({ event }) {
     const p = String(price).toLowerCase().trim();
     return p === '0' || p === 'gratis' || p === 'gratuito' || p === 'sin cargo';
   };
-  const eventIsFree = isFree(event.price);
+  const eventIsFree = isFree(event.precio ?? event.price);
 
   return (
     <article

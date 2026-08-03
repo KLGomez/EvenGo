@@ -88,7 +88,7 @@ export function useEvents() {
         return p === '0' || p === 'gratis' || p === 'gratuito' || p === 'sin cargo';
       };
 
-      const eventIsFree = isFree(event.price);
+      const eventIsFree = isFree(event.precio ?? event.price);
 
       const matchesPrice =
         filters.price === 'Todos' ||
