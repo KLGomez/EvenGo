@@ -7,7 +7,7 @@ import { CATEGORIES, ZONES, DATE_FILTERS } from '../data/events';
  */
 export default function FilterPanel({ filters, onFilterChange, onReset, resultCount }) {
   return (
-    <aside className="w-full">
+    <aside className="w-full sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar pr-1">
       <div
         className="bg-white/5 backdrop-blur-md border border-white/10
           rounded-2xl p-5 flex flex-col gap-5"
