@@ -7,6 +7,7 @@ import EventGrid from './components/EventGrid';
 import DataSourceBanner from './components/DataSourceBanner';
 import Dashboard from './components/Dashboard';
 import ChatBot from './components/ChatBot';
+import ScrollToTop from './components/ScrollToTop';
 import { EventProvider } from './context/EventProvider';
 import { useEventContext } from './hooks/useEventContext';
 
@@ -109,6 +110,9 @@ export default function App() {
 
             {/* Widget de Asistente Virtual Flotante (Google Gemini) */}
             <ChatBot />
+
+            {/* Botón flotante para regresar al inicio (Scroll to top) */}
+            <ScrollToTop />
 
             {/* Footer Global */}
             <footer className="border-t border-white/5 py-8 text-center">
