@@ -3,48 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import { useEventContext } from '../hooks/useEventContext';
 
 /**
- * Componentes de estilizado Tailwind para ReactMarkdown (Renderizado de enlaces y anclas internas)
- */
-const markdownComponents = {
-  p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
-  ul: ({ children }) => <ul className="list-disc ml-4 mb-1.5 space-y-0.5">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal ml-4 mb-1.5 space-y-0.5">{children}</ol>,
-  li: ({ children }) => <li className="mb-0.5">{children}</li>,
-  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-  h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
-  h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
-  a: ({ href, children }) => {
-    const handleClick = (e) => {
-      if (href?.startsWith('#')) {
-        e.preventDefault();
-        const element = document.querySelector(href);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.classList.add('ring-2', 'ring-indigo-400', 'transition-all');
-          setTimeout(() => {
-            element.classList.remove('ring-2', 'ring-indigo-400');
-          }, 2000);
-        }
-      }
-    };
-
-    return (
-      <a
-        href={href}
-        onClick={handleClick}
-        target={href?.startsWith('#') ? '_self' : '_blank'}
-        rel={href?.startsWith('#') ? undefined : 'noopener noreferrer'}
-        className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
-      >
-        {children}
-        <span className="text-[10px]">📍</span>
-      </a>
-    );
-  },
-};
-
-/**
- * ChatBot: Asistente Virtual Flotante de EvenGo con Scroll Suave hacia Tarjetas de Eventos
+ * ChatBot: Asistente Virtual Flotante de EvenGo con UX Refinada
+ * Incluye auto-cierre del panel y resaltado luminoso al hacer clic en enlaces de eventos.
  */
 export default function ChatBot() {
   const { filteredEvents } = useEventContext();
@@ -53,7 +13,7 @@ export default function ChatBot() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Estado con historial completo de mensajes para mantener memoria de conversación ({ role: 'user' | 'assistant', content: string })
+  // Estado con historial completo de mensajes ({ role: 'user' | 'assistant', content: string })
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -82,7 +42,6 @@ export default function ChatBot() {
       content: query.trim(),
     };
 
-    // Actualización inmediata del historial en el cliente
     const updatedHistory = [...messages, userMessage];
     setMessages(updatedHistory);
     setInput('');
@@ -101,7 +60,6 @@ export default function ChatBot() {
         description: event.description || '',
       }));
 
-      // Petición enviando el array completo de mensajes para mantener la memoria
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -149,6 +107,54 @@ export default function ChatBot() {
     'Recomiéndame un concierto en Palermo',
     '¿Hay opciones culturales gratuitas?',
   ];
+
+  // Componentes de estilizado Markdown definidos dentro del componente para acceder a setIsOpen
+  const markdownComponents = {
+    p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+    ul: ({ children }) => <ul className="list-disc ml-4 mb-1.5 space-y-0.5">{children}</ul>,
+    ol: ({ children }) => <ol className="list-decimal ml-4 mb-1.5 space-y-0.5">{children}</ol>,
+    li: ({ children }) => <li className="mb-0.5">{children}</li>,
+    strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+    h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
+    h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
+    a: ({ href, children }) => {
+      const handleClick = (e) => {
+        if (href?.startsWith('#')) {
+          e.preventDefault();
+          const element = document.querySelector(href);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const highlightClasses = [
+              'ring-4',
+              'ring-pink-500',
+              'bg-indigo-900/40',
+              'scale-[1.03]',
+              'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
+              'z-10',
+            ];
+            element.classList.add(...highlightClasses);
+            setTimeout(() => {
+              element.classList.remove(...highlightClasses);
+            }, 3000);
+          }
+          setIsOpen(false);
+        }
+      };
+
+      return (
+        <a
+          href={href}
+          onClick={handleClick}
+          target={href?.startsWith('#') ? '_self' : '_blank'}
+          rel={href?.startsWith('#') ? undefined : 'noopener noreferrer'}
+          className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
+        >
+          {children}
+          <span className="text-[10px]">📍</span>
+        </a>
+      );
+    },
+  };
 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end">
