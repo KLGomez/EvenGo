@@ -1,22 +1,39 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vite.dev/config/
-//
-// ⚠️  NO HAY server.proxy para /api aquí.
-//
-// Con `vercel dev`, Vercel actúa como router y enruta /api/* a las funciones
-// serverless antes de que Vite vea la petición. Si Vite tuviera un proxy a /api,
-// capturaría las rutas y rompería el enrutamiento de Vercel.
-//
-// Flujo correcto con `vercel dev`:
-//   Browser → Vercel Dev Router → /api/* → Función serverless (Node.js)
-//                                → /*     → Vite Dev Server (React)
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-  ],
-  // server.proxy intencionalmente ausente
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'pwa-192x192.svg', 'pwa-512x512.svg'],
+      manifest: {
+        name: 'EvenGo - Agenda de Buenos Aires',
+        short_name: 'EvenGo',
+        description: 'Descubrí los mejores eventos culturales, musicales y gastronómicos de Buenos Aires.',
+        theme_color: '#0f172a',
+        background_color: '#0f172a',
+        display: 'standalone',
+        icons: [
+          {
+            src: 'pwa-192x192.svg',
+            sizes: '192x192',
+            type: 'image/svg+xml'
+          },
+          {
+            src: 'pwa-512x512.svg',
+            sizes: '512x512',
+            type: 'image/svg+xml',
+            purpose: 'any maskable'
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+      }
+    })
+  ]
 })
