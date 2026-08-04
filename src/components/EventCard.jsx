@@ -1,5 +1,6 @@
 import React from 'react';
 import { buildGoogleCalendarUrl, formatDate } from '../utils/calendarUtils';
+import useFavorites from '../hooks/useFavorites';
 
 // Paleta de colores por categoría
 const CATEGORY_STYLES = {
@@ -31,9 +32,12 @@ const CATEGORY_STYLES = {
 
 /**
  * Tarjeta individual de evento con diseño glassmorphism.
- * Incluye botones para visitar la URL del evento y agregar a Google Calendar.
+ * Incluye botón de guardar en favoritos, visitar la URL del evento y agregar a Google Calendar.
  */
 export default function EventCard({ event }) {
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const favorite = isFavorite(event.id);
+
   const style = CATEGORY_STYLES[event.category] || CATEGORY_STYLES['Cultural'];
   const calendarUrl = buildGoogleCalendarUrl(event);
   const formattedDate = formatDate(event.date);
@@ -57,8 +61,8 @@ export default function EventCard({ event }) {
 
       {/* Contenido de la tarjeta */}
       <div className="flex flex-col flex-1 p-5 gap-4">
-        {/* Header: categoría + ícono + badge de precio */}
-        <div className="flex items-center justify-between">
+        {/* Header: categoría + ícono + badge de precio + favorito */}
+        <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2">
             <span
               className={`text-xs font-semibold px-3 py-1 rounded-full ${style.pill}`}
@@ -75,7 +79,44 @@ export default function EventCard({ event }) {
               {eventIsFree ? 'Gratis' : 'De pago'}
             </span>
           </div>
-          <span className="text-xs text-slate-400 font-medium">{event.time} hs</span>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              toggleFavorite(event);
+            }}
+            aria-label={favorite ? 'Quitar de favoritos' : 'Guardar en favoritos'}
+            title={favorite ? 'Quitar de favoritos' : 'Guardar en favoritos'}
+            className="p-2 rounded-full bg-slate-900/60 backdrop-blur-md border border-white/20 shadow-lg hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all duration-300"
+          >
+            {favorite ? (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-5 h-5 text-rose-500"
+              >
+                <path d="M11.645 20.91l-.007-.003-.022-.012a15.247 15.247 0 01-.383-.218 25.18 25.18 0 01-4.244-3.17C4.688 15.36 2.25 12.174 2.25 8.25 2.25 5.322 4.714 3 7.688 3A5.5 5.5 0 0112 5.052 5.5 5.5 0 0116.313 3c2.973 0 5.437 2.322 5.437 5.25 0 3.925-2.438 7.111-4.739 9.256a25.175 25.175 0 01-4.244 3.17 15.247 15.247 0 01-.383.219l-.022.012-.007.004-.003.001a.752.752 0 01-.704 0l-.003-.001z" />
+              </svg>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 text-white/80"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"
+                />
+              </svg>
+            )}
+          </button>
         </div>
 
         {/* Título */}
@@ -88,11 +129,11 @@ export default function EventCard({ event }) {
           {event.description}
         </p>
 
-        {/* Meta: fecha y ubicación */}
+        {/* Meta: fecha, hora y ubicación */}
         <div className="flex flex-col gap-1.5 pt-1 border-t border-white/10">
           <div className="flex items-center gap-2 text-slate-300 text-xs">
             <span className="text-slate-500">📅</span>
-            <span className="font-medium capitalize">{formattedDate}</span>
+            <span className="font-medium capitalize">{formattedDate} • {event.time} hs</span>
           </div>
           <div className="flex items-center gap-2 text-slate-300 text-xs">
             <span className="text-slate-500">📍</span>
