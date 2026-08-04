@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { useEventContext } from '../hooks/useEventContext';
 
 /**
- * Componentes de estilizado Tailwind para ReactMarkdown (Renderizado de enlaces y textos)
+ * Componentes de estilizado Tailwind para ReactMarkdown (Renderizado de enlaces y anclas internas)
  */
 const markdownComponents = {
   p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
@@ -13,21 +13,38 @@ const markdownComponents = {
   strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
   h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
   h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-indigo-300 underline font-semibold hover:text-indigo-200 transition-colors inline-flex items-center gap-0.5"
-    >
-      {children}
-      <span className="text-[10px]">↗</span>
-    </a>
-  ),
+  a: ({ href, children }) => {
+    const handleClick = (e) => {
+      if (href?.startsWith('#')) {
+        e.preventDefault();
+        const element = document.querySelector(href);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('ring-2', 'ring-indigo-400', 'transition-all');
+          setTimeout(() => {
+            element.classList.remove('ring-2', 'ring-indigo-400');
+          }, 2000);
+        }
+      }
+    };
+
+    return (
+      <a
+        href={href}
+        onClick={handleClick}
+        target={href?.startsWith('#') ? '_self' : '_blank'}
+        rel={href?.startsWith('#') ? undefined : 'noopener noreferrer'}
+        className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
+      >
+        {children}
+        <span className="text-[10px]">📍</span>
+      </a>
+    );
+  },
 };
 
 /**
- * ChatBot: Asistente Virtual Flotante de EvenGo con Memoria de Conversación y Redirección a Eventos
+ * ChatBot: Asistente Virtual Flotante de EvenGo con Scroll Suave hacia Tarjetas de Eventos
  */
 export default function ChatBot() {
   const { filteredEvents } = useEventContext();
@@ -40,7 +57,7 @@ export default function ChatBot() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: '¡Hola! 👋 Soy el asistente virtual de **EvenGo**. ¿Buscas algún plan cultural en Buenos Aires? Dime qué te gustaría hacer y te recomendaré las mejores opciones con sus enlaces directos.',
+      content: '¡Hola! 👋 Soy el asistente virtual de **EvenGo**. ¿Buscas algún plan cultural en Buenos Aires? Dime qué te gustaría hacer y te recomendaré los eventos destacados.',
     },
   ]);
 
@@ -72,29 +89,17 @@ export default function ChatBot() {
     setIsLoading(true);
 
     try {
-      // ── Inyección de Contexto: Minimizando eventos con title y url obligatorios ──────
-      const contextData = (filteredEvents || []).slice(0, 20).map((event) => {
-        // Garantizar URL válida para redirección
-        let eventUrl = event.url || event.link;
-        if (!eventUrl && event.slug) {
-          eventUrl = `https://linda.buenosaires.gob.ar/descubrir/${event.slug}`;
-        } else if (!eventUrl && event.pathAlias) {
-          eventUrl = `https://linda.buenosaires.gob.ar${event.pathAlias}`;
-        } else if (!eventUrl) {
-          eventUrl = 'https://linda.buenosaires.gob.ar';
-        }
-
-        return {
-          title: event.title,
-          url: eventUrl,
-          category: event.category,
-          location: event.location,
-          address: event.address || '',
-          date: event.date,
-          time: event.time || '',
-          description: event.description || '',
-        };
-      });
+      // ── Inyección de Contexto con anclas internas anchorLink ─────────────────────
+      const contextData = (filteredEvents || []).slice(0, 20).map((event) => ({
+        title: event.title,
+        anchorLink: `#event-${event.id}`,
+        category: event.category,
+        location: event.location,
+        address: event.address || '',
+        date: event.date,
+        time: event.time || '',
+        description: event.description || '',
+      }));
 
       // Petición enviando el array completo de mensajes para mantener la memoria
       const response = await fetch('/api/chat', {

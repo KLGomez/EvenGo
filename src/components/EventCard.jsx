@@ -51,6 +51,7 @@ export default function EventCard({ event }) {
 
   return (
     <article
+      id={`event-${event.id}`}
       className={`group relative flex flex-col rounded-2xl overflow-hidden
         bg-white/5 backdrop-blur-md border border-white/10
         shadow-lg hover:shadow-2xl ${style.glow}

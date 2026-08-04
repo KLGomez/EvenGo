@@ -50,7 +50,7 @@ export default async function handler(req, res) {
 
 REGLAS DE FORMATO Y REDIRECCIÓN:
 1. Sé amable, conciso y formatea tu respuesta de manera clara usando Markdown.
-2. CADA VEZ que recomiendes o menciones un evento de la lista, DEBES incluir obligatoriamente su enlace clickeable utilizando estrictamente el formato Markdown: [Nombre del Evento](url) usando el campo "url" exacto especificado en el JSON del evento.
+2. CADA VEZ que recomiendes un evento, DEBES incluir su enlace clickeable usando el formato Markdown: [Nombre del Evento](anchorLink) utilizando el campo "anchorLink" proporcionado.
 3. Mantén el contexto de la conversación anterior para responder preguntas de seguimiento (memoria activa).
 
 Lista de Eventos Culturales Disponibles en Buenos Aires (JSON):
