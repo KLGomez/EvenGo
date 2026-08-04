@@ -3,9 +3,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 /**
  * Vercel Serverless Function: POST /api/chat
  * Asistente Virtual Cultural de EvenGo alimentado por la API de Google Gemini.
+ * Soporta memoria de conversación (historial) e inyección de contexto con enlaces Markdown.
  */
 export default async function handler(req, res) {
-  // Configuración de encabezados CORS y Content-Type
+  // Encabezados CORS y Content-Type
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -24,47 +25,54 @@ export default async function handler(req, res) {
     if (!apiKey) {
       console.error('[api/chat] GEMINI_API_KEY no encontrada en las variables de entorno de Vercel.');
       return res.status(500).json({
-        error: 'Configuración incompleta en el servidor: Falta GEMINI_API_KEY en Vercel.',
+        error: 'Configuración incompleta en el servidor: Falta GEMINI_API_KEY.',
       });
     }
 
-    // Extracción segura del cuerpo de la petición (soporta objeto parseado o string JSON)
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-    const { message, contextData = [] } = body;
+    const { messages = [], message, contextData = [] } = body;
 
-    if (!message || typeof message !== 'string' || message.trim() === '') {
-      return res.status(400).json({ error: 'El campo "message" es requerido y no puede estar vacío.' });
+    // Construcción del historial de conversación para preservar la memoria
+    let conversationHistory = [];
+    if (Array.isArray(messages) && messages.length > 0) {
+      conversationHistory = messages;
+    } else if (message) {
+      conversationHistory = [{ role: 'user', content: message }];
     }
 
-    if (!apiKey.startsWith('AIzaSy')) {
-      console.warn('[api/chat] Advertencia: GEMINI_API_KEY no parece ser una clave estándar de Google AI Studio (suelen comenzar con "AIzaSy..."). Verifique su origen en https://aistudio.google.com/app/apikey.');
+    if (conversationHistory.length === 0) {
+      return res.status(400).json({ error: 'El campo "messages" o "message" es requerido.' });
     }
 
-    // Inicializar SDK de Google Generative AI
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    const systemInstruction = `Eres el asistente virtual de EvenGo, experto en la agenda cultural de Buenos Aires. Basándote ÚNICAMENTE en la siguiente lista de eventos en formato JSON, responde a la consulta del usuario recomendando el mejor plan. Sé amable, conciso y formatea tu respuesta.`;
+    const systemInstruction = `Eres el asistente virtual de EvenGo, experto en la agenda cultural de Buenos Aires. Basándote ÚNICAMENTE en la siguiente lista de eventos en formato JSON, responde a las consultas del usuario recomendando los mejores planes.
 
-    // Inicializar el modelo activo gemini-flash-latest
+REGLAS DE FORMATO Y REDIRECCIÓN:
+1. Sé amable, conciso y formatea tu respuesta de manera clara usando Markdown.
+2. CADA VEZ que recomiendes o menciones un evento de la lista, DEBES incluir obligatoriamente su enlace clickeable utilizando estrictamente el formato Markdown: [Nombre del Evento](url) usando el campo "url" exacto especificado en el JSON del evento.
+3. Mantén el contexto de la conversación anterior para responder preguntas de seguimiento (memoria activa).
+
+Lista de Eventos Culturales Disponibles en Buenos Aires (JSON):
+${JSON.stringify(contextData, null, 2)}`;
+
     const model = genAI.getGenerativeModel({
       model: 'gemini-flash-latest',
       systemInstruction: systemInstruction,
     });
 
-    // Construcción del prompt unificado
-    const prompt = `Lista de Eventos Culturales Disponibles en Buenos Aires (JSON):\n${JSON.stringify(
-      contextData,
-      null,
-      2
-    )}\n\nConsulta del Usuario:\n"${message}"`;
+    // Formatear historial para el SDK de Gemini ({ role: 'user'|'model', parts: [{ text }] })
+    const contents = conversationHistory.map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    }));
 
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent({ contents });
     const response = await result.response;
     const replyText = response.text();
 
     return res.status(200).json({ reply: replyText });
   } catch (error) {
-    // Registro detallado de la traza de error en los logs de Vercel
     console.error('Error en API Gemini:', error.message || error);
     return res.status(500).json({
       error: 'Error en API Gemini',

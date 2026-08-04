@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { useEventContext } from '../hooks/useEventContext';
 
 /**
- * Componentes de estilizado Tailwind para ReactMarkdown (Edición Compacta UI/UX)
+ * Componentes de estilizado Tailwind para ReactMarkdown (Renderizado de enlaces y textos)
  */
 const markdownComponents = {
   p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
@@ -18,15 +18,16 @@ const markdownComponents = {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-indigo-300 underline hover:text-indigo-200 transition-colors"
+      className="text-indigo-300 underline font-semibold hover:text-indigo-200 transition-colors inline-flex items-center gap-0.5"
     >
       {children}
+      <span className="text-[10px]">↗</span>
     </a>
   ),
 };
 
 /**
- * ChatBot: Asistente Virtual Flotante de EvenGo con Google Gemini (Diseño Compacto & Responsivo)
+ * ChatBot: Asistente Virtual Flotante de EvenGo con Memoria de Conversación y Redirección a Eventos
  */
 export default function ChatBot() {
   const { filteredEvents } = useEventContext();
@@ -34,11 +35,12 @@ export default function ChatBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Estado con historial completo de mensajes para mantener memoria de conversación ({ role: 'user' | 'assistant', content: string })
   const [messages, setMessages] = useState([
     {
-      id: 'welcome',
-      sender: 'bot',
-      text: '¡Hola! 👋 Soy el asistente virtual de **EvenGo**. ¿Buscas algún plan cultural en Buenos Aires? Dime qué te gustaría hacer y te recomendaré las mejores opciones.',
+      role: 'assistant',
+      content: '¡Hola! 👋 Soy el asistente virtual de **EvenGo**. ¿Buscas algún plan cultural en Buenos Aires? Dime qué te gustaría hacer y te recomendaré las mejores opciones con sus enlaces directos.',
     },
   ]);
 
@@ -59,35 +61,49 @@ export default function ChatBot() {
     if (!query.trim() || isLoading) return;
 
     const userMessage = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: query.trim(),
+      role: 'user',
+      content: query.trim(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // Actualización inmediata del historial en el cliente
+    const updatedHistory = [...messages, userMessage];
+    setMessages(updatedHistory);
     setInput('');
     setIsLoading(true);
 
     try {
-      // Optimización de Contexto: Recorte a máximo 20 eventos y selección de campos esenciales
-      const contextData = (filteredEvents || []).slice(0, 20).map((event) => ({
-        title: event.title,
-        category: event.category,
-        location: event.location,
-        address: event.address || '',
-        date: event.date,
-        time: event.time || '',
-        description: event.description || '',
-      }));
+      // ── Inyección de Contexto: Minimizando eventos con title y url obligatorios ──────
+      const contextData = (filteredEvents || []).slice(0, 20).map((event) => {
+        // Garantizar URL válida para redirección
+        let eventUrl = event.url || event.link;
+        if (!eventUrl && event.slug) {
+          eventUrl = `https://linda.buenosaires.gob.ar/descubrir/${event.slug}`;
+        } else if (!eventUrl && event.pathAlias) {
+          eventUrl = `https://linda.buenosaires.gob.ar${event.pathAlias}`;
+        } else if (!eventUrl) {
+          eventUrl = 'https://linda.buenosaires.gob.ar';
+        }
 
-      // Petición POST a la Serverless Function /api/chat
+        return {
+          title: event.title,
+          url: eventUrl,
+          category: event.category,
+          location: event.location,
+          address: event.address || '',
+          date: event.date,
+          time: event.time || '',
+          description: event.description || '',
+        };
+      });
+
+      // Petición enviando el array completo de mensajes para mantener la memoria
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: query.trim(),
+          messages: updatedHistory,
           contextData,
         }),
       });
@@ -99,18 +115,16 @@ export default function ChatBot() {
       }
 
       const botMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'bot',
-        text: data.reply || 'No pude generar una respuesta adecuada en este momento.',
+        role: 'assistant',
+        content: data.reply || 'No pude generar una respuesta adecuada en este momento.',
       };
 
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error('[ChatBot] Error al comunicarse con /api/chat:', error);
       const errorMessage = {
-        id: (Date.now() + 1).toString(),
-        sender: 'bot',
-        text: `⚠️ Ocurrió un error al consultar con la IA (${error.message}). Por favor, intenta nuevamente más tarde.`,
+        role: 'assistant',
+        content: `⚠️ Ocurrió un error al consultar con la IA (${error.message}). Por favor, intenta nuevamente más tarde.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -166,30 +180,30 @@ export default function ChatBot() {
 
           {/* Historial de Mensajes */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
-            {messages.map((msg) => (
+            {messages.map((msg, index) => (
               <div
-                key={msg.id}
+                key={index}
                 className={`flex flex-col ${
-                  msg.sender === 'user' ? 'items-end' : 'items-start'
+                  msg.role === 'user' ? 'items-end' : 'items-start'
                 }`}
               >
                 <div
                   className={`max-w-[88%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
-                    msg.sender === 'user'
+                    msg.role === 'user'
                       ? 'bg-indigo-600 text-white rounded-br-xs shadow-md shadow-indigo-600/20'
                       : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-xs shadow-md'
                   }`}
                 >
-                  {msg.sender === 'bot' ? (
+                  {msg.role === 'assistant' ? (
                     <ReactMarkdown components={markdownComponents}>
-                      {msg.text}
+                      {msg.content}
                     </ReactMarkdown>
                   ) : (
-                    <span className="whitespace-pre-wrap">{msg.text}</span>
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
                   )}
                 </div>
                 <span className="text-[9px] text-slate-500 mt-0.5 px-1">
-                  {msg.sender === 'user' ? 'Tú' : 'EvenGo AI'}
+                  {msg.role === 'user' ? 'Tú' : 'EvenGo AI'}
                 </span>
               </div>
             ))}
