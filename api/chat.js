@@ -490,11 +490,11 @@ export default async function handler(req, res) {
   } catch (geminiError) {
     console.error('[api/chat] Error en proveedor primario (Gemini):', geminiError.message || geminiError);
 
-    // ── PLAN B: Fallback a Groq (si existe FALLBACK_API_KEY) ─────────────────
-    const fallbackApiKey = process.env.FALLBACK_API_KEY;
-    if (fallbackApiKey) {
+    // ── PLAN B: Fallback a x.ai (Grok) (si existe XAI_API_KEY) ─────────────────
+    const xaiApiKey = process.env.XAI_API_KEY || process.env.FALLBACK_API_KEY;
+    if (xaiApiKey) {
       try {
-        console.log('[api/chat] Intentando respuesta vía Fallback (Groq)...');
+        console.log('[api/chat] Intentando respuesta vía Fallback (x.ai Grok)...');
 
         const formattedMessages = [
           { role: 'system', content: SYSTEM_INSTRUCTION },
@@ -504,42 +504,42 @@ export default async function handler(req, res) {
           })),
         ];
 
-        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const xaiResponse = await fetch('https://api.x.ai/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${fallbackApiKey}`,
+            'Authorization': `Bearer ${xaiApiKey}`,
           },
           body: JSON.stringify({
-            model: 'llama3-8b-8192',
+            model: 'grok-beta',
             messages: formattedMessages,
           }),
           signal: AbortSignal.timeout(10000),
         });
 
-        if (!groqResponse.ok) {
-          const errText = await groqResponse.text();
-          throw new Error(`Groq API responded with status ${groqResponse.status}: ${errText}`);
+        if (!xaiResponse.ok) {
+          const errText = await xaiResponse.text();
+          throw new Error(`x.ai (Grok) API responded with status ${xaiResponse.status}: ${errText}`);
         }
 
-        const groqData = await groqResponse.json();
-        const reply = groqData.choices?.[0]?.message?.content;
+        const xaiData = await xaiResponse.json();
+        const reply = xaiData.choices?.[0]?.message?.content;
 
         if (reply) {
-          console.log('[api/chat] Respuesta obtenida con éxito desde Groq (llama3-8b-8192).');
+          console.log('[api/chat] Respuesta obtenida con éxito desde x.ai (Grok - grok-2-latest).');
           return res.status(200).json({
             reply,
             toolCalls: [],
             actions: { favorites: [], invites: [], itineraries: [] },
           });
         } else {
-          throw new Error('Respuesta de Groq vacía o sin contenido');
+          throw new Error('Respuesta de x.ai (Grok) vacía o sin contenido');
         }
-      } catch (groqError) {
-        console.error('[api/chat] Error en proveedor de Fallback (Groq):', groqError.message || groqError);
+      } catch (xaiError) {
+        console.error('[api/chat] Error en proveedor de Fallback (x.ai Grok):', xaiError.message || xaiError);
       }
     } else {
-      console.warn('[api/chat] Variable FALLBACK_API_KEY no configurada. Omitiendo Plan B.');
+      console.warn('[api/chat] Variable XAI_API_KEY no configurada. Omitiendo Plan B.');
     }
 
     // ── PLAN C: Graceful Degradation (Respuesta estática de contingencia) ─────
