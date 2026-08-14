@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install xAI CLI
         run: curl -fsSL https://x.ai/cli/install.sh | bash
-      - name: Run Grok PR Review
+      - name: Review PR with Grok
         run: grok -p "Review this PR for bugs" --always-approve
         env:
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
