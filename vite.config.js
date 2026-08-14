@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -35,5 +35,18 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       }
     })
-  ]
+  ],
+  test: {
+    // Tests de API (Node.js puro, sin DOM)
+    environment: 'node',
+    // Tests de hooks de React usan jsdom
+    environmentMatchGlobs: [
+      ['src/**/*.test.{js,jsx}', 'jsdom'],
+    ],
+    include: [
+      'api/**/*.test.js',
+      'src/**/*.test.{js,jsx}',
+    ],
+    globals: true,
+  },
 })
