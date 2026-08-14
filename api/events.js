@@ -11,6 +11,15 @@
 //   pagination: { page, limit, total, totalPages }
 // }
 
+import { getCached, setCached } from './_cache.js';
+
+// TTL del caché en milisegundos (10 minutos).
+// Linda actualiza su agenda cultural con baja frecuencia intradiaria,
+// por lo que 10 min de caché elimina la mayoría de requests redundantes
+// sin comprometer la frescura de los datos.
+const EVENTS_CACHE_TTL = 10 * 60 * 1000;
+const EVENTS_CACHE_KEY = 'linda-events';
+
 // ─── Configuración ────────────────────────────────────────────────────────────
 
 const LINDA_API = "https://linda.buenosaires.gob.ar/api/frontend/events/filter";
@@ -273,6 +282,20 @@ export default async function handler(req, res) {
   if (req.method !== "GET")    return res.status(405).json({ error: "Method Not Allowed" });
 
   try {
+    // ── Caché en memoria (warm-instance) ────────────────────────────────────
+    const cachedEvents = getCached(EVENTS_CACHE_KEY, EVENTS_CACHE_TTL);
+    if (cachedEvents) {
+      console.log(`[events] Sirviendo ${cachedEvents.length} eventos desde caché (TTL: ${EVENTS_CACHE_TTL / 60000} min)`);
+      return res.status(200).json({
+        events:    cachedEvents,
+        total:     cachedEvents.length,
+        source:    "LINDA",
+        live:      true,
+        cached:    true,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     let records, live;
 
     try {
@@ -285,11 +308,15 @@ export default async function handler(req, res) {
 
     const events = records.map(normalizeRecord);
 
+    // Guardar en caché solo si los datos son live (no mockear el caché)
+    if (live) setCached(EVENTS_CACHE_KEY, events);
+
     return res.status(200).json({
       events,
       total:     events.length,
       source:    "LINDA",
       live,
+      cached:    false,
       timestamp: new Date().toISOString(),
     });
 
