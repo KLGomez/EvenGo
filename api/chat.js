@@ -392,9 +392,17 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El campo "messages" es requerido.' });
     }
 
+    // ── Sanitización de modelo Gemini ─────────────────────────────────────────
+    // Evita errores 404 si la variable GEMINI_MODEL contiene un modelo inexistente (ej: gemini-2.5-flash)
+    const VALID_MODELS = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+    const envModel = (process.env.GEMINI_MODEL || '').trim();
+    const modelName = VALID_MODELS.includes(envModel) ? envModel : 'gemini-1.5-flash';
+
+    console.log(`[api/chat] Inicializando modelo Gemini: "${modelName}" (env GEMINI_MODEL: "${envModel || 'sin definir'}")`);
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+      model: modelName,
       systemInstruction: SYSTEM_INSTRUCTION,
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
     });
