@@ -430,6 +430,9 @@ async function extractFromGCBA() {
  *
  * @returns {Promise<EvenGoEvent[]>}
  */
+// ── Exports nombrados de funciones puras (para tests unitarios) ───────────────
+export { classifyCategory, normalizeRecord, normalizeLocation };
+
 export async function fetchAndTransformGCBA() {
   let rawRecords;
   let fromMock = false;
