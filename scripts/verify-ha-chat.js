@@ -30,6 +30,7 @@ loadEnvFile();
 const ORIGINAL_ENV = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY,
   FALLBACK_API_KEY: process.env.FALLBACK_API_KEY,
+  XAI_API_KEY: process.env.XAI_API_KEY,
 };
 
 function restoreEnv() {
@@ -42,6 +43,11 @@ function restoreEnv() {
     process.env.FALLBACK_API_KEY = ORIGINAL_ENV.FALLBACK_API_KEY;
   } else {
     delete process.env.FALLBACK_API_KEY;
+  }
+  if (ORIGINAL_ENV.XAI_API_KEY !== undefined) {
+    process.env.XAI_API_KEY = ORIGINAL_ENV.XAI_API_KEY;
+  } else {
+    delete process.env.XAI_API_KEY;
   }
 }
 
@@ -123,14 +129,14 @@ async function runTests() {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // TEST 2: Fallback (Groq)
+  // TEST 2: Fallback (x.ai Grok)
   // ───────────────────────────────────────────────────────────────────────────
   try {
     restoreEnv();
-    console.log(`\n${BOLD}Test 2: Fallback a Groq (Gemini fallido, FALLBACK_API_KEY activa)${RESET}`);
+    console.log(`\n${BOLD}Test 2: Fallback a x.ai Grok (Gemini fallido, XAI_API_KEY activa)${RESET}`);
     process.env.GEMINI_API_KEY = 'invalid_gemini_key_simulation_123';
-    if (!process.env.FALLBACK_API_KEY) {
-      process.env.FALLBACK_API_KEY = 'gsk_mock_fallback_key_test';
+    if (!process.env.XAI_API_KEY) {
+      process.env.XAI_API_KEY = 'xai-mock-key-simulation-123';
     }
 
     const { req, res } = createMockReqRes({
@@ -160,8 +166,9 @@ async function runTests() {
   // ───────────────────────────────────────────────────────────────────────────
   try {
     restoreEnv();
-    console.log(`\n${BOLD}Test 3: Graceful Degradation / Plan C (Sin Gemini ni FALLBACK_API_KEY)${RESET}`);
+    console.log(`\n${BOLD}Test 3: Graceful Degradation / Plan C (Sin Gemini ni XAI_API_KEY)${RESET}`);
     process.env.GEMINI_API_KEY = 'invalid_gemini_key_simulation_123';
+    delete process.env.XAI_API_KEY;
     delete process.env.FALLBACK_API_KEY;
 
     const { req, res } = createMockReqRes({
