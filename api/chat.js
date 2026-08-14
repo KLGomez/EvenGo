@@ -3,8 +3,8 @@ import { createEvent } from 'ics';
 
 /**
  * Vercel Serverless Function: POST /api/chat
- * Asistente Virtual Conversacional de EvenGo alimentado por Gemini Function Calling (Tool Use).
- * Normalización estricta de historial ({ role: 'user' | 'model', parts: [{ text }] }).
+ * Asistente Virtual Conversacional de EvenGo alimentado por Gemini 3.6 Flash.
+ * Manejo directo de contents array conservando candidatos de razonamiento y respuestas de herramientas con rol 'user'.
  */
 
 const LINDA_API = 'https://linda.buenosaires.gob.ar/api/frontend/events/filter';
@@ -340,11 +340,11 @@ REGLAS DE ACTUACIÓN:
 
 // ─── REINTENTOS AUTOMÁTICOS PARA ERRORES TEMPORALES DE CAPACIDAD ──────────────
 
-async function sendMessageWithRetry(chatSession, payload, maxRetries = 3) {
+async function generateContentWithRetry(model, payload, maxRetries = 3) {
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
-      return await chatSession.sendMessage(payload);
+      return await model.generateContent(payload);
     } catch (err) {
       attempt++;
       const isTransient =
@@ -393,30 +393,26 @@ export default async function handler(req, res) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
+      model: 'gemini-3.6-flash',
       systemInstruction: SYSTEM_INSTRUCTION,
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
     });
 
-    // Mapeo estricto de historial: Gemini SDK exige role strictly 'user' | 'model' y parts text
+    // Sanitización de historial previo
     const pastHistory = rawHistory
       .slice(0, -1)
-      .map((msg) => {
-        const role = msg.role === 'user' ? 'user' : 'model';
-        const strContent = typeof msg.content === 'string'
-          ? msg.content
-          : JSON.stringify(msg.content || '');
-        return {
-          role,
-          parts: [{ text: strContent || '...' }],
-        };
-      })
+      .map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: typeof msg.content === 'string' ? msg.content : String(msg.content || '') }],
+      }))
       .filter((m) => m.parts[0].text.trim().length > 0);
 
     const lastUserMsg = String(rawHistory[rawHistory.length - 1].content || '');
 
-    const chatSession = model.startChat({ history: pastHistory });
-    let result = await sendMessageWithRetry(chatSession, lastUserMsg);
+    const contents = [
+      ...pastHistory,
+      { role: 'user', parts: [{ text: lastUserMsg }] },
+    ];
 
     const toolCallLog = [];
     const actions = { favorites: [], invites: [], itineraries: [] };
@@ -424,9 +420,23 @@ export default async function handler(req, res) {
     let hops = 0;
 
     while (hops < MAX_TOOL_HOPS) {
-      const call = result.response.functionCalls()?.[0];
-      if (!call) break;
+      const result = await generateContentWithRetry(model, { contents });
+      const functionCalls = result.response.functionCalls();
 
+      if (!functionCalls || functionCalls.length === 0) {
+        return res.status(200).json({
+          reply: result.response.text(),
+          toolCalls: toolCallLog,
+          actions,
+        });
+      }
+
+      // Preservar el candidato generado por el modelo (contiene thought_signature y functionCall)
+      if (result.response.candidates?.[0]?.content) {
+        contents.push(result.response.candidates[0].content);
+      }
+
+      const call = functionCalls[0];
       const impl = TOOL_IMPLEMENTATIONS[call.name];
       const toolResult = impl
         ? await impl(call.args || {})
@@ -451,22 +461,19 @@ export default async function handler(req, res) {
         }
       }
 
-      result = await sendMessageWithRetry(chatSession, [
-        {
-          functionResponse: {
-            name: call.name,
-            response: toolResult,
-          },
-        },
-      ]);
+      // Enviar la respuesta de la función con role 'user'
+      contents.push({
+        role: 'user',
+        parts: [{ functionResponse: { name: call.name, response: toolResult } }],
+      });
 
       hops += 1;
     }
 
-    const replyText = result.response.text();
+    const finalResult = await generateContentWithRetry(model, { contents });
 
     return res.status(200).json({
-      reply: replyText,
+      reply: finalResult.response.text(),
       toolCalls: toolCallLog,
       actions,
     });
