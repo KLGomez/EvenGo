@@ -11,8 +11,10 @@ const markdownComponents = {
   h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
   h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
   a: ({ href, children }) => {
+    const isAnchor = href?.startsWith('#');
+
     const handleClick = (e) => {
-      if (href?.startsWith('#')) {
+      if (isAnchor) {
         e.preventDefault();
         const element = document.querySelector(href);
         if (element) {
@@ -35,14 +37,14 @@ const markdownComponents = {
 
     return (
       <a
-        href={href}
+        href={isAnchor ? href : undefined}
         onClick={handleClick}
-        target={href?.startsWith('#') ? '_self' : '_blank'}
-        rel={href?.startsWith('#') ? undefined : 'noopener noreferrer'}
+        target={isAnchor ? '_self' : undefined}
+        rel={isAnchor ? undefined : 'noopener noreferrer'}
         className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
       >
         {children}
-        <span className="text-[10px]">📍</span>
+        <span className="text-[10px]">{isAnchor ? '📍' : '🔗'}</span>
       </a>
     );
   },
@@ -252,7 +254,59 @@ export default function ChatBot() {
                             </div>
                           )}
 
-                          {/* Cronograma / Timeline */}
+                          {/* Evento Principal con botón de anchor interno */}
+                          {itin.primaryEvent && (
+                            <div className="flex items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/20 p-1.5 rounded-lg">
+                              <span className="text-[11px] text-indigo-200 font-semibold truncate">
+                                ⭐ {itin.primaryEvent.title}
+                              </span>
+                              {itin.primaryEvent.anchorLink && (
+                                <button
+                                  onClick={() => {
+                                    const el = document.querySelector(itin.primaryEvent.anchorLink);
+                                    if (el) {
+                                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
+                                      el.classList.add(...cls);
+                                      setTimeout(() => el.classList.remove(...cls), 3000);
+                                    }
+                                  }}
+                                  className="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-md font-semibold transition-colors whitespace-nowrap"
+                                >
+                                  📍 Ver en EvenGo
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Eventos Alternativos con botones internos */}
+                          {itin.alternativeEvents?.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alternativas:</span>
+                              {itin.alternativeEvents.map((ev, eIdx) => (
+                                <div key={eIdx} className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] text-slate-300 truncate">{ev.title}</span>
+                                  {ev.anchorLink && (
+                                    <button
+                                      onClick={() => {
+                                        const el = document.querySelector(ev.anchorLink);
+                                        if (el) {
+                                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                          const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
+                                          el.classList.add(...cls);
+                                          setTimeout(() => el.classList.remove(...cls), 3000);
+                                        }
+                                      }}
+                                      className="flex-shrink-0 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded-md font-semibold transition-colors whitespace-nowrap"
+                                    >
+                                      📍 Ver
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           {itin.timeline && (
                             <div className="space-y-1 my-1">
                               <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">
