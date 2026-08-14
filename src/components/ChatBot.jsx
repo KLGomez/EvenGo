@@ -1,23 +1,67 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { useEventContext } from '../hooks/useEventContext';
+
+// ── Componentes de estilizado Markdown desacoplados del ciclo de render de React ──────
+const markdownComponents = {
+  p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc ml-4 mb-1.5 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal ml-4 mb-1.5 space-y-0.5">{children}</ol>,
+  li: ({ children }) => <li className="mb-0.5">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+  h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
+  h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
+  a: ({ href, children }) => {
+    const handleClick = (e) => {
+      if (href?.startsWith('#')) {
+        e.preventDefault();
+        const element = document.querySelector(href);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const highlightClasses = [
+            'ring-4',
+            'ring-pink-500',
+            'bg-indigo-900/40',
+            'scale-[1.03]',
+            'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
+            'z-10',
+          ];
+          element.classList.add(...highlightClasses);
+          setTimeout(() => {
+            element.classList.remove(...highlightClasses);
+          }, 3000);
+        }
+      }
+    };
+
+    return (
+      <a
+        href={href}
+        onClick={handleClick}
+        target={href?.startsWith('#') ? '_self' : '_blank'}
+        rel={href?.startsWith('#') ? undefined : 'noopener noreferrer'}
+        className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
+      >
+        {children}
+        <span className="text-[10px]">📍</span>
+      </a>
+    );
+  },
+};
 
 /**
- * ChatBot: Asistente Virtual Flotante de EvenGo con UX Refinada
- * Incluye auto-cierre del panel y resaltado luminoso al hacer clic en enlaces de eventos.
+ * ChatBot: Asistente Virtual Conversacional & Concierge Ejecutivo de EvenGo.
+ * Soporta itinerarios autónomos (plan_itinerary), clima, guardado de favoritos y descargas .ics.
  */
 export default function ChatBot() {
-  const { filteredEvents } = useEventContext();
-
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Estado con historial completo de mensajes ({ role: 'user' | 'assistant', content: string })
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: '¡Hola! 👋 Soy el asistente virtual de **EvenGo**. ¿Buscas algún plan cultural en Buenos Aires? Dime qué te gustaría hacer y te recomendaré los eventos destacados.',
+      content:
+        '¡Hola! 👋 Soy el Concierge Ejecutivo de **EvenGo**. Puedo planificar itinerarios completos en Buenos Aires, verificar el clima, sugerir transporte y agendar eventos en tu calendario.',
     },
   ]);
 
@@ -48,26 +92,11 @@ export default function ChatBot() {
     setIsLoading(true);
 
     try {
-      // ── Inyección de Contexto con anclas internas anchorLink ─────────────────────
-      const contextData = (filteredEvents || []).slice(0, 20).map((event) => ({
-        title: event.title,
-        anchorLink: `#event-${event.id}`,
-        category: event.category,
-        location: event.location,
-        address: event.address || '',
-        date: event.date,
-        time: event.time || '',
-        description: event.description || '',
-      }));
-
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: updatedHistory,
-          contextData,
         }),
       });
 
@@ -77,9 +106,37 @@ export default function ChatBot() {
         throw new Error(data.error || data.detail || 'Error en la respuesta del servidor');
       }
 
+      // ── Persistencia Automática de Favoritos en localStorage ──────────────────
+      if (data.actions?.favorites?.length > 0) {
+        try {
+          const rawStored = localStorage.getItem('evengo_favorites');
+          const storedFavorites = rawStored ? JSON.parse(rawStored) : [];
+
+          let hasChanges = false;
+          data.actions.favorites.forEach((fav) => {
+            const exists = storedFavorites.some(
+              (item) => (typeof item === 'object' && item !== null ? item.id : item) === fav.id
+            );
+            if (!exists) {
+              storedFavorites.unshift(fav);
+              hasChanges = true;
+            }
+          });
+
+          if (hasChanges) {
+            localStorage.setItem('evengo_favorites', JSON.stringify(storedFavorites));
+            window.dispatchEvent(new Event('favoritesUpdated'));
+          }
+        } catch (e) {
+          console.error('[ChatBot] Error guardando favoritos en localStorage:', e);
+        }
+      }
+
       const botMessage = {
         role: 'assistant',
-        content: data.reply || 'No pude generar una respuesta adecuada en este momento.',
+        content: data.reply || 'No pude generar una respuesta en este momento.',
+        toolCalls: data.toolCalls || [],
+        actions: data.actions || { favorites: [], invites: [], itineraries: [] },
       };
 
       setMessages((prev) => [...prev, botMessage]);
@@ -87,7 +144,7 @@ export default function ChatBot() {
       console.error('[ChatBot] Error al comunicarse con /api/chat:', error);
       const errorMessage = {
         role: 'assistant',
-        content: `⚠️ Ocurrió un error al consultar con la IA (${error.message}). Por favor, intenta nuevamente más tarde.`,
+        content: `⚠️ Ocurrió un error al consultar con el Agente (${error.message}). Por favor, intenta nuevamente.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -103,65 +160,17 @@ export default function ChatBot() {
   };
 
   const promptSuggestions = [
-    '¿Qué eventos hay este fin de semana?',
-    'Recomiéndame un concierto en Palermo',
-    '¿Hay opciones culturales gratuitas?',
+    '🗺️ Armame un plan para este sábado en Palermo',
+    '🎭 Planifica una salida cultural con recital y cena',
+    '🌧️ ¿Hay planes bajo techo si llueve hoy?',
   ];
-
-  // Componentes de estilizado Markdown definidos dentro del componente para acceder a setIsOpen
-  const markdownComponents = {
-    p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
-    ul: ({ children }) => <ul className="list-disc ml-4 mb-1.5 space-y-0.5">{children}</ul>,
-    ol: ({ children }) => <ol className="list-decimal ml-4 mb-1.5 space-y-0.5">{children}</ol>,
-    li: ({ children }) => <li className="mb-0.5">{children}</li>,
-    strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-    h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
-    h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
-    a: ({ href, children }) => {
-      const handleClick = (e) => {
-        if (href?.startsWith('#')) {
-          e.preventDefault();
-          const element = document.querySelector(href);
-          if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            const highlightClasses = [
-              'ring-4',
-              'ring-pink-500',
-              'bg-indigo-900/40',
-              'scale-[1.03]',
-              'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
-              'z-10',
-            ];
-            element.classList.add(...highlightClasses);
-            setTimeout(() => {
-              element.classList.remove(...highlightClasses);
-            }, 3000);
-          }
-          setIsOpen(false);
-        }
-      };
-
-      return (
-        <a
-          href={href}
-          onClick={handleClick}
-          target={href?.startsWith('#') ? '_self' : '_blank'}
-          rel={href?.startsWith('#') ? undefined : 'noopener noreferrer'}
-          className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
-        >
-          {children}
-          <span className="text-[10px]">📍</span>
-        </a>
-      );
-    },
-  };
 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end">
-      {/* Ventana de Chat Modal (Versión Compacta & Responsiva) */}
+      {/* Ventana de Chat Modal */}
       {isOpen && (
-        <div className="w-[90vw] sm:w-[340px] h-[450px] max-h-[75vh] mb-3 flex flex-col rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-3">
-          {/* Header Compacto */}
+        <div className="w-[90vw] sm:w-[370px] h-[500px] max-h-[82vh] mb-3 flex flex-col rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-3">
+          {/* Header */}
           <div className="px-3.5 py-2.5 bg-slate-950/80 border-b border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="relative">
@@ -172,12 +181,12 @@ export default function ChatBot() {
               </div>
               <div>
                 <h3 className="text-white font-bold text-xs leading-tight flex items-center gap-1">
-                  EvenGo AI
-                  <span className="px-1 py-0.2 text-[9px] bg-indigo-500/20 text-indigo-300 rounded font-mono border border-indigo-500/30">
-                    Gemini
+                  EvenGo Concierge
+                  <span className="px-1.5 py-0.2 text-[9px] bg-purple-500/20 text-purple-300 rounded font-mono border border-purple-500/30">
+                    Ejecutivo 3.0
                   </span>
                 </h3>
-                <p className="text-slate-400 text-[11px]">Asistente de Eventos en BA</p>
+                <p className="text-slate-400 text-[11px]">Agente Autónomo & Planificador</p>
               </div>
             </div>
             <button
@@ -190,7 +199,7 @@ export default function ChatBot() {
           </div>
 
           {/* Historial de Mensajes */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
             {messages.map((msg, index) => (
               <div
                 key={index}
@@ -199,12 +208,27 @@ export default function ChatBot() {
                 }`}
               >
                 <div
-                  className={`max-w-[88%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
+                  className={`max-w-[90%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-indigo-600 text-white rounded-br-xs shadow-md shadow-indigo-600/20'
                       : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-xs shadow-md'
                   }`}
                 >
+                  {/* Badges de Herramientas Invocadas por el Agente */}
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1 mb-2 pb-1.5 border-b border-white/10">
+                      <span className="text-[10px] text-slate-400 font-medium">Tools:</span>
+                      {msg.toolCalls.map((tc, idx) => (
+                        <span
+                          key={idx}
+                          className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded font-mono"
+                        >
+                          ⚙️ {tc.tool}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
                   {msg.role === 'assistant' ? (
                     <ReactMarkdown components={markdownComponents}>
                       {msg.content}
@@ -212,9 +236,84 @@ export default function ChatBot() {
                   ) : (
                     <span className="whitespace-pre-wrap">{msg.content}</span>
                   )}
+
+                  {/* Tarjetas de Itinerarios Ejecutados */}
+                  {msg.actions?.itineraries && msg.actions.itineraries.length > 0 && (
+                    <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
+                      {msg.actions.itineraries.map((itin, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-slate-950/70 border border-indigo-500/30 rounded-xl p-2.5 text-xs text-slate-200 flex flex-col gap-1.5"
+                        >
+                          <div className="flex items-center justify-between font-bold text-white text-[12px]">
+                            <span>🗺️ {itin.title}</span>
+                            <span className="text-[10px] bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded font-mono">
+                              {itin.date}
+                            </span>
+                          </div>
+
+                          {/* Badge de Clima */}
+                          {itin.weather && (
+                            <div className="text-[11px] text-slate-300 flex items-center gap-1.5 bg-slate-900/60 p-1.5 rounded-lg border border-white/5">
+                              <span>{itin.weather.willRain ? '🌧️' : '☀️'}</span>
+                              <span>
+                                Máx {itin.weather.tempMaxC}°C / Mín {itin.weather.tempMinC}°C
+                              </span>
+                              <span className="text-slate-400 text-[10px]">
+                                ({itin.weather.rainProbability}% prob. lluvia)
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Cronograma / Timeline */}
+                          {itin.timeline && (
+                            <div className="space-y-1 my-1">
+                              <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">
+                                Cronograma Sugerido:
+                              </span>
+                              {itin.timeline.map((step, sIdx) => (
+                                <div key={sIdx} className="flex items-start gap-1.5 text-[11px]">
+                                  <span className="font-mono text-indigo-300 font-semibold w-10 flex-shrink-0">
+                                    {step.time}
+                                  </span>
+                                  <span className="text-slate-300">{step.activity}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Consejo de vestimenta/logística */}
+                          {itin.logistics?.clothingTip && (
+                            <p className="text-[10px] italic text-slate-400 bg-white/5 p-1.5 rounded">
+                              💡 {itin.logistics.clothingTip}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Acciones de Descarga de Calendario (.ics) */}
+                  {msg.actions?.invites && msg.actions.invites.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-col gap-1.5">
+                      <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
+                        📅 Pases de Calendario listos:
+                      </span>
+                      {msg.actions.invites.map((inv, idx) => (
+                        <a
+                          key={idx}
+                          href={inv.downloadUrl}
+                          download={inv.filename}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[11px] font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                        >
+                          📥 Descargar .ics: {inv.title}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <span className="text-[9px] text-slate-500 mt-0.5 px-1">
-                  {msg.role === 'user' ? 'Tú' : 'EvenGo AI'}
+                  {msg.role === 'user' ? 'Tú' : 'EvenGo AI Agent'}
                 </span>
               </div>
             ))}
@@ -228,7 +327,7 @@ export default function ChatBot() {
                     <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <span className="text-[11px] text-slate-400 font-medium ml-1">Consultando agenda...</span>
+                  <span className="text-[11px] text-slate-400 font-medium ml-1">Planificando itinerario y logística...</span>
                 </div>
               </div>
             )}
@@ -236,7 +335,7 @@ export default function ChatBot() {
             {/* Sugerencias Rápidas */}
             {messages.length === 1 && !isLoading && (
               <div className="pt-1">
-                <p className="text-slate-500 text-[11px] mb-1.5 font-medium">Sugerencias rápidas:</p>
+                <p className="text-slate-500 text-[11px] mb-1.5 font-medium">Sugerencias del Concierge:</p>
                 <div className="flex flex-col gap-1">
                   {promptSuggestions.map((sug, idx) => (
                     <button
@@ -244,7 +343,7 @@ export default function ChatBot() {
                       onClick={() => handleSendMessage(sug)}
                       className="text-left text-[11px] bg-white/5 hover:bg-indigo-500/20 text-slate-300 hover:text-indigo-200 border border-white/5 hover:border-indigo-500/30 px-2.5 py-1.5 rounded-lg transition-all"
                     >
-                      💡 {sug}
+                      {sug}
                     </button>
                   ))}
                 </div>
@@ -261,7 +360,7 @@ export default function ChatBot() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Pregunta sobre eventos en BA..."
+              placeholder="Pide un plan, evento o sugerencia..."
               disabled={isLoading}
               className="flex-1 bg-slate-900 border border-white/10 text-white placeholder-slate-500 text-[13px] rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 transition-all"
             />
@@ -293,7 +392,7 @@ export default function ChatBot() {
           <div className="flex items-center gap-2">
             <span className="text-xl animate-pulse">✨</span>
             <span className="max-w-0 overflow-hidden whitespace-nowrap group-hover:max-w-xs font-semibold text-xs transition-all duration-300 ease-in-out">
-              Asistente AI
+              EvenGo Concierge
             </span>
           </div>
         )}

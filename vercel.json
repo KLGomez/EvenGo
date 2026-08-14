@@ -1,8 +1,7 @@
 {
-  "version": 2,
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api/|src/|node_modules/|@|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
