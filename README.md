@@ -170,3 +170,4 @@ npm run build
 
 Diseñado y desarrollado por **Katherine Gomez**.  
 *Quilmes, Buenos Aires, Argentina.*
+
