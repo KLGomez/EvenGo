@@ -4,7 +4,7 @@ import { createEvent } from 'ics';
 /**
  * Vercel Serverless Function: POST /api/chat
  * Asistente Virtual Conversacional de EvenGo alimentado por Gemini Flash.
- * Modelo configurable vía variable de entorno GEMINI_MODEL (default: gemini-2.5-flash).
+ * Modelo configurable vía variable de entorno GEMINI_MODEL (default: gemini-1.5-flash).
  * Manejo directo de contents array conservando candidatos de razonamiento y respuestas de herramientas con rol 'user'.
  */
 
@@ -394,7 +394,7 @@ export default async function handler(req, res) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
       systemInstruction: SYSTEM_INSTRUCTION,
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
     });

@@ -160,7 +160,7 @@ npm run build
 | Variable | Tipo | Requerida | Descripción |
 | :--- | :--- | :---: | :--- |
 | `GEMINI_API_KEY` | Server-side | ✅ | Clave de la API de Gemini. Obtenerla en [Google AI Studio](https://aistudio.google.com/app/apikey). |
-| `GEMINI_MODEL` | Server-side | ❌ | Nombre del modelo Gemini a usar. Default: `gemini-2.5-flash`. Útil para cambiar de modelo sin modificar código. |
+| `GEMINI_MODEL` | Server-side | ❌ | Nombre del modelo Gemini a usar. Default: `gemini-1.5-flash`. Útil para cambiar de modelo sin modificar código. |
 
 > **Variables con prefijo `VITE_`** se inyectan en el bundle del cliente en build time — nunca uses este prefijo para claves privadas.
 
