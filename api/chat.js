@@ -395,9 +395,9 @@ export default async function handler(req, res) {
     }
 
     // Sanitización de modelo Gemini
-    const VALID_MODELS = ['gemini-1.5-flash-latest', 'gemini-flash-latest', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+    const VALID_MODELS = ['gemini-1.5-flash', 'gemini-flash-latest', 'gemini-1.5-pro', 'gemini-2.0-flash'];
     const envModel = (process.env.GEMINI_MODEL || '').trim();
-    const modelName = VALID_MODELS.includes(envModel) ? envModel : 'gemini-1.5-flash-latest';
+    const modelName = VALID_MODELS.includes(envModel) ? envModel : 'gemini-1.5-flash';
 
     console.log(`[api/chat] Inicializando modelo Gemini: "${modelName}" (env GEMINI_MODEL: "${envModel || 'sin definir'}")`);
 
@@ -511,7 +511,7 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${xaiApiKey}`,
           },
           body: JSON.stringify({
-            model: 'grok-beta',
+            model: 'grok-2-latest',
             messages: formattedMessages,
           }),
           signal: AbortSignal.timeout(10000),
