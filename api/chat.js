@@ -375,16 +375,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
+  let rawHistory = [];
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Configuración incompleta: Falta GEMINI_API_KEY.' });
-    }
-
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const { messages = [], message } = body;
 
-    let rawHistory = Array.isArray(messages) && messages.length > 0
+    rawHistory = Array.isArray(messages) && messages.length > 0
       ? messages
       : message ? [{ role: 'user', content: message }] : [];
 
@@ -392,8 +388,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El campo "messages" es requerido.' });
     }
 
-    // ── Sanitización de modelo Gemini ─────────────────────────────────────────
-    // Evita errores 404 si la variable GEMINI_MODEL contiene un modelo inexistente (ej: gemini-2.5-flash)
+    // ── PLAN A: Proveedor Primario (Gemini) ──────────────────────────────────
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Configuración incompleta: Falta GEMINI_API_KEY.');
+    }
+
+    // Sanitización de modelo Gemini
     const VALID_MODELS = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'];
     const envModel = (process.env.GEMINI_MODEL || '').trim();
     const modelName = VALID_MODELS.includes(envModel) ? envModel : 'gemini-1.5-flash';
@@ -440,7 +441,7 @@ export default async function handler(req, res) {
         });
       }
 
-      // Preservar el candidato generado por el modelo (contiene thought_signature y functionCall)
+      // Preservar el candidato generado por el modelo
       if (result.response.candidates?.[0]?.content) {
         contents.push(result.response.candidates[0].content);
       }
@@ -486,11 +487,67 @@ export default async function handler(req, res) {
       toolCalls: toolCallLog,
       actions,
     });
-  } catch (error) {
-    console.error('[api/chat] Error en Agente Gemini:', error.message || error);
-    return res.status(500).json({
-      error: 'Error en API Gemini',
-      detail: error.message || String(error),
+  } catch (geminiError) {
+    console.error('[api/chat] Error en proveedor primario (Gemini):', geminiError.message || geminiError);
+
+    // ── PLAN B: Fallback a Groq (si existe FALLBACK_API_KEY) ─────────────────
+    const fallbackApiKey = process.env.FALLBACK_API_KEY;
+    if (fallbackApiKey) {
+      try {
+        console.log('[api/chat] Intentando respuesta vía Fallback (Groq)...');
+
+        const formattedMessages = [
+          { role: 'system', content: SYSTEM_INSTRUCTION },
+          ...rawHistory.map((m) => ({
+            role: m.role === 'user' ? 'user' : 'assistant',
+            content: typeof m.content === 'string' ? m.content : String(m.content || ''),
+          })),
+        ];
+
+        const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${fallbackApiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'llama3-8b-8192',
+            messages: formattedMessages,
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (!groqResponse.ok) {
+          const errText = await groqResponse.text();
+          throw new Error(`Groq API responded with status ${groqResponse.status}: ${errText}`);
+        }
+
+        const groqData = await groqResponse.json();
+        const reply = groqData.choices?.[0]?.message?.content;
+
+        if (reply) {
+          console.log('[api/chat] Respuesta obtenida con éxito desde Groq (llama3-8b-8192).');
+          return res.status(200).json({
+            reply,
+            toolCalls: [],
+            actions: { favorites: [], invites: [], itineraries: [] },
+          });
+        } else {
+          throw new Error('Respuesta de Groq vacía o sin contenido');
+        }
+      } catch (groqError) {
+        console.error('[api/chat] Error en proveedor de Fallback (Groq):', groqError.message || groqError);
+      }
+    } else {
+      console.warn('[api/chat] Variable FALLBACK_API_KEY no configurada. Omitiendo Plan B.');
+    }
+
+    // ── PLAN C: Graceful Degradation (Respuesta estática de contingencia) ─────
+    console.error('[api/chat] Activando respuesta estática de contingencia (Plan C).');
+    return res.status(200).json({
+      reply: '¡Uf! Estoy procesando demasiadas consultas y agoté mis créditos de IA temporalmente. 😅 Mientras recupero energía, te invito a explorar las tarjetas de eventos utilizando los filtros de arriba.',
+      toolCalls: [],
+      actions: { favorites: [], invites: [], itineraries: [] },
     });
   }
 }
