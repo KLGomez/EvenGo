@@ -395,9 +395,9 @@ export default async function handler(req, res) {
     }
 
     // Sanitización de modelo Gemini
-    const VALID_MODELS = ['gemini-1.5-flash', 'gemini-flash-latest', 'gemini-1.5-pro', 'gemini-2.0-flash'];
+    const VALID_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-1.5-pro'];
     const envModel = (process.env.GEMINI_MODEL || '').trim();
-    const modelName = VALID_MODELS.includes(envModel) ? envModel : 'gemini-1.5-flash';
+    const modelName = VALID_MODELS.includes(envModel) ? envModel : 'gemini-2.0-flash';
 
     console.log(`[api/chat] Inicializando modelo Gemini: "${modelName}" (env GEMINI_MODEL: "${envModel || 'sin definir'}")`);
 
