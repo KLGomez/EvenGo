@@ -214,20 +214,7 @@ export default function ChatBot() {
                       : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-xs shadow-md'
                   }`}
                 >
-                  {/* Badges de Herramientas Invocadas por el Agente */}
-                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1 mb-2 pb-1.5 border-b border-white/10">
-                      <span className="text-[10px] text-slate-400 font-medium">Tools:</span>
-                      {msg.toolCalls.map((tc, idx) => (
-                        <span
-                          key={idx}
-                          className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded font-mono"
-                        >
-                          ⚙️ {tc.tool}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+
 
                   {msg.role === 'assistant' ? (
                     <ReactMarkdown components={markdownComponents}>

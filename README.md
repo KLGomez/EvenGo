@@ -1,10 +1,11 @@
 # 🗺️ EvenGo — Agenda, Radar Cultural & PWA de Buenos Aires
 
-> **La PWA definitiva para descubrir, analizar y guardar los eventos culturales, musicales, deportivos y gastronómicos más relevantes de la Ciudad de Buenos Aires en tiempo real.**
+> **La PWA definitiva para descubrir, analizar y guardar los eventos culturales, musicales, deportivos y gastronómicos más relevantes de la Ciudad de Buenos Aires en tiempo real, impulsada por un Agente Ejecutivo Autónomo de IA.**
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Gemini AI](https://img.shields.io/badge/Gemini-3.6_Flash-8E75FF?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![PWA](https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
 [![Vercel](https://img.shields.io/badge/Vercel-Serverless-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
 
@@ -14,11 +15,18 @@
 
 **EvenGo** es una **Progressive Web App (PWA)** de alto rendimiento concebida para revolucionar la manera en que residentes y turistas exploran la vibrante oferta cultural de Buenos Aires.
 
-Diseñada con un enfoque **Mobile First** y estética *Dark Glassmorphism*, la plataforma combina la agilidad de un **Motor de Búsqueda y Filtrado Reactivo**, la potencia de un **Dashboard de Inteligencia Cultural (Radar Cultural)**, la interacción con un **Asistente de IA (Gemini)** y las capacidades nativas de una **PWA instalable offline**.
+Diseñada con un enfoque **Mobile First** y estética *Dark Glassmorphism*, la plataforma combina la agilidad de un **Motor de Búsqueda y Filtrado Reactivo**, la potencia de un **Dashboard de Inteligencia Cultural (Radar Cultural)**, las capacidades nativas de una **PWA instalable offline** y el nuevo **Agente Ejecutivo Autónomo de IA (Gemini 3.6 Flash)** capaz de planificar salidas completas, coordinar eventos reales con el clima en vivo y generar pases de calendario `.ics` de 1 clic.
 
 ---
 
 ## ✨ Features Destacadas (Funcionalidades)
+
+### 🤖 Agente Ejecutivo Autónomo & Planificador de Itinerarios (`Gemini 3.6 Flash`)
+- **Planificación Autónoma de Salidas (`plan_itinerary`)**: El agente evalúa simultáneamente eventos reales de la agenda cultural, pronóstico meteorológico en vivo (Open-Meteo), consejos de transporte y vestimenta, y cronogramas paso a paso.
+- **Function Calling Multihop Reales**: Encadenamiento autónomo de herramientas (`search_events`, `check_weather`, `save_favorite`, `generate_calendar_invite`, `plan_itinerary`) sin guiones fijos.
+- **Pases de Calendario Descargables (.ics)**: Generación dinámica en memoria de invitaciones de calendario estándar descargables con 1 solo clic.
+- **Tarjetas UI Interactivas de Itinerario**: Presentación de itinerarios con insignias de clima, cronograma de horarios, eventos alternativos y consejos de vestimenta directamente en el chat.
+- **Sincronización Atómica con LocalStorage**: Cuando el agente guarda un favorito a pedido del usuario, el sistema notifica eventos globales (`favoritesUpdated`) para refrescar la interfaz al instante.
 
 ### 🔍 Filtrado Combinable & Búsqueda Avanzada
 - **Motor Multicriterio**: Filtrado simultáneo y reactivo por **Categoría** (Cultural, Musical, Deportivo, Gastronomía), **Zona / Barrio** (Palermo, San Telmo, Belgrano, Recoleta, Obelisco/Centro, etc.), **Rango de Fecha** (Hoy, Este fin de semana, Esta semana, Próximamente) y **Modalidad de Precio** (Gratis vs. Pago).
@@ -28,11 +36,9 @@ Diseñada con un enfoque **Mobile First** y estética *Dark Glassmorphism*, la p
 - **Persistencia Local**: Guardado de eventos seleccionados directamente en el navegador del usuario utilizando `localStorage`.
 - **Experiencia de Guardado Fluida**: Indicadores visuales en tiempo real y contador dinámico de favoritos en la barra de navegación.
 
-### 📱 Experiencia de Usuario & UI Inmersiva
-- **Drawer Lateral (Slide-over)**: Panel deslizable de acceso rápido para gestionar la lista de 'Mi Ruta' sin interrumpir la navegación.
-- **Scroll to Top Dinámico**: Botón flotante que detecta automáticamente la posición del scroll vertical para retornar fluidamente al encabezado.
-- **Dashboard "Radar Cultural"**: Módulo de Inteligencia de Datos con gráficos interactivos (`Recharts`) tipo Radar, Donut y Barras, complementado con exportador nativo de reportes a **CSV (con BOM UTF-8 `\uFEFF`)** apto para Microsoft Excel.
-- **Asistente de IA Cultural ("Lina")**: Chatbot inteligente integrado a la API de **Google Gemini** (`@google/generative-ai`) contextualizado para recomendar eventos y responder inquietudes sobre la agenda de la ciudad.
+### 📊 Dashboard "Radar Cultural" & Analytics
+- **Visualización Interactiva**: Gráficos (`Recharts`) tipo Radar, Donut y Barras para analizar la distribución temática y territorial de eventos en CABA.
+- **Exportación de Datos**: Exportador nativo a **CSV (con BOM UTF-8 `\uFEFF`)** totalmente apto para Microsoft Excel.
 
 ### ⚡ PWA & Capacidades Offline (Nativas)
 - **Instalación Multiplataforma**: Instalable como aplicación nativa en iOS, Android, Windows y macOS gracias al soporte de Web App Manifest (`manifest.webmanifest`).
@@ -40,46 +46,26 @@ Diseñada con un enfoque **Mobile First** y estética *Dark Glassmorphism*, la p
 
 ---
 
-## 🔌 Fuente de Datos y Reverse Engineering
-
-Una de las piezas arquitectónicas más destacadas de **EvenGo** es su estrategia de ingesta y extracción de datos reales. La aplicación **no depende de datos estáticos ni de fuentes simuladas**, sino de la infraestructura oficial del portal cultural **"Linda" del Gobierno de la Ciudad de Buenos Aires (GCBA)**.
+## 🧠 Arquitectura del Agente Autónomo (Function Calling)
 
 ```
-[ Frontend PWA ] ──> fetch('/api/events') ──> [ Vercel Serverless Function ]
-                                                       │
-                                            Network Request / Reverse Eng.
-                                                       ▼
-                                       https://linda.buenosaires.gob.ar
+[ Usuario Chat UI ]
+       │  "Armame un plan para este sábado en Palermo"
+       ▼
+[ POST /api/chat ] ──> [ Gemini 3.6 Flash Engine ]
+                                │
+               ┌────────────────┼────────────────┐
+               ▼                ▼                ▼
+       searchEvents()    checkWeather()   planItinerary()
+       (API GCBA Linda)   (Open-Meteo)     (Composite Tool)
+               │                │                │
+               └────────────────┼────────────────┘
+                                ▼
+                       generateCalendarInvite()
+                                │ (.ics Base64 Data URI)
+                                ▼
+                  [ Respuesta UI con Tarjeta + .ics ]
 ```
-
-### 🛠️ Proceso de Ingeniería Inversa & Pipeline ETL:
-1. **Network Sniffing & Discovery**: Al tratarse de una API pública no documentada oficialmente, se efectuó un análisis exhaustivo del tráfico HTTP (`Network Tab` de Chrome DevTools) para interceptar las consultas internas del portal *Linda*.
-2. **Identificación de Endpoints y Payload**: Se descubrieron las rutas internas REST (`/api/frontend/events/filter`) y los patrones de parámetros para paginación, filtros de fecha y etiquetas temáticas.
-3. **Servidor Intermedio (Vercel Serverless Function)**: Se desarrolló un backend liviano en Node.js (`api/events.js` y `api/sync-gcba.js`) que actúa como API Gateway y normalizador.
-4. **Normalización & Sanitizado O(N)**: El backend intercepta la estructura JSON cruda de GCBA, mapea nombres de barrios en `snake_case` (ej: `villa_crespo` → `Villa Crespo`), clasifica eventos mediante expresiones regulares sobre etiquetas/tags y estandariza los esquemas a la interfaz esperada por el cliente React.
-5. **Fallbacks Defensivos de Alta Disponibilidad**: En caso de indisponibilidad temporal del servidor gubernamental o errores de red, la PWA activa un mecanismo transparente de degradación (*Graceful Degradation*), exponiendo un aviso visual (`DataSourceBanner`) y sirviendo un set de contingencia de alta fidelidad.
-
----
-
-## 🧠 Decisiones de Arquitectura (El 'Por qué')
-
-### 1. Custom Hooks Modulares & Separación de Incumbencias
-La lógica de negocio se abstrayo completamente de la capa de renderizado UI:
-- `useEvents`: Centraliza el estado de eventos, la ejecución del pipeline de filtrado combinado con `useMemo` y la orquestación del fetch contra `/api/events`.
-- `useFavorites`: Gestiona el ciclo de vida del *Planner Personal* en `localStorage`.
-- `useEventAnalytics`: Ejecuta agregaciones estadísticas O(N) en una sola pasada para alimentar las métricas del Radar Cultural.
-
-### 2. Sincronización de Estado Reactivo mediante `window.dispatchEvent`
-Para evitar el problema de **Prop-Drilling** o la sobrecarga de dependencias pesadas (como Redux o Zustand) para una funcionalidad focalizada como Favoritos, se implementó un **Bus de Eventos Nativo**:
-```javascript
-// Al modificar favoritos, se notifica globalmente a la ventana:
-localStorage.setItem('evengo_favorites', JSON.stringify(updatedFavorites));
-window.dispatchEvent(new Event('favoritesUpdated'));
-```
-Cualquier componente (Navbar, EventCard, Drawer) suscrito al evento personalizado `favoritesUpdated` o al evento `storage` (para sincronización entre pestañas abiertas) reactualiza su estado de forma atómica e instantánea.
-
-### 3. Enfoque Mobile-First & UI Reactiva
-El diseño UI se concibió prioritariamente para pantallas táctiles móviles, adaptando progresivamente los componentes hacia vistas de escritorio. Se empleó Tailwind CSS v4 para lograr transiciones suaves, contenedores adaptativos y jerarquías tipográficas de alta legibilidad.
 
 ---
 
@@ -88,25 +74,17 @@ El diseño UI se concibió prioritariamente para pantallas táctiles móviles, a
 | Capa | Tecnología | Descripción |
 | :--- | :--- | :--- |
 | **Core Framework** | **React 19** | Biblioteca principal de UI utilizando Hooks avanzados (`useMemo`, `useCallback`, `useEffect`). |
+| **Agente de IA** | **Gemini 3.6 Flash** | Motor LLM con Function Calling nativo, reintentos automáticos y preservación de razonamiento. |
 | **Build System** | **Vite 8** | Bundler de ultra alta velocidad con reemplazo de módulos en caliente (HMR). |
-| **Styling** | **Tailwind CSS v4** | Framework CSS utilitario para diseño responsivo y Dark Mode. |
+| **Styling** | **Tailwind CSS v4** | Framework CSS utilitario para diseño responsivo y Dark Mode Glassmorphism. |
 | **PWA & Offline** | **Vite Plugin PWA / Workbox** | Generación autogestionada de Service Worker y Web App Manifest. |
 | **Analytics & Data** | **Recharts** | Generación de gráficos SVG interactivos y adaptativos. |
-| **Inteligencia Artificial**| **Google Gemini API** | Modelo LLM integrado para el chatbot asistente cultural. |
-| **Routing** | **React Router DOM v7** | Enrutamiento declarativo del lado del cliente. |
-| **Backend & ETL** | **Vercel Serverless Functions**| Endpoints Node.js para Reverse Engineering y normalización de la API GCBA. |
+| **Calendario .ics** | **ics** | Motor de generación de invitaciones iCalendar RFC 5545 en memoria. |
+| **Backend & ETL** | **Vercel Serverless Functions**| Endpoints Node.js para API Gateway, sanitización de datos y orquestación del agente. |
 
 ---
 
 ## ⚙️ Instalación y Uso
-
-Sigue estos sencillos pasos para clonar y ejecutar **EvenGo** en tu entorno local:
-
-### Prerrequisitos
-- **Node.js** (v18.0.0 o superior)
-- **npm** o **yarn**
-
-### Comandos de Ejecución
 
 ```bash
 # 1. Clonar el repositorio
@@ -118,22 +96,19 @@ cd EvenGo
 # 3. Instalar las dependencias
 npm install
 
-# 4. Iniciar el servidor de desarrollo (con Mocks locales)
+# 4. Iniciar el servidor de desarrollo
 npm run dev
 
-# 5. (Opcional) Probar las Vercel Serverless Functions con datos reales del GCBA
+# 5. Probar endpoints Serverless locales (requiere Vercel CLI)
 npx vercel dev
 
-# 6. Compilar para producción (Bundle optimizado y PWA Service Worker)
+# 6. Compilar para producción
 npm run build
-
-# 7. Vista previa de la build de producción
-npm run preview
 ```
 
 ---
 
-## 📄 Licencia y Autoria
+## 📄 Licencia y Autoría
 
-Diseñado y desarrollado por **Katherine Gomez**.
+Diseñado y desarrollado por **Katherine Gomez**.  
 *Quilmes, Buenos Aires, Argentina.*
