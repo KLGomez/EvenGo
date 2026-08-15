@@ -395,11 +395,9 @@ export default async function handler(req, res) {
     }
 
     // Sanitización de modelo Gemini
-    const VALID_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-1.5-pro'];
-    const envModel = (process.env.GEMINI_MODEL || '').trim();
-    const modelName = VALID_MODELS.includes(envModel) ? envModel : 'gemini-2.0-flash';
+    const modelName = 'gemini-flash-latest';
 
-    console.log(`[api/chat] Inicializando modelo Gemini: "${modelName}" (env GEMINI_MODEL: "${envModel || 'sin definir'}")`);
+    console.log(`[api/chat] Inicializando modelo Gemini: "${modelName}"`);
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
@@ -496,23 +494,18 @@ export default async function handler(req, res) {
       try {
         console.log('[api/chat] Intentando respuesta vía Fallback (x.ai Grok)...');
 
-        const formattedMessages = [
-          { role: 'system', content: SYSTEM_INSTRUCTION },
-          ...rawHistory.map((m) => ({
-            role: m.role === 'user' ? 'user' : 'assistant',
-            content: typeof m.content === 'string' ? m.content : String(m.content || ''),
-          })),
-        ];
+        const promptCombinado = `${SYSTEM_INSTRUCTION}\n\nHistorial de Conversación:\n` +
+          rawHistory.map((m) => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${typeof m.content === 'string' ? m.content : String(m.content || '')}`).join('\n');
 
-        const xaiResponse = await fetch('https://api.x.ai/v1/chat/completions', {
+        const xaiResponse = await fetch('https://api.x.ai/v1/responses', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${xaiApiKey}`,
           },
           body: JSON.stringify({
-            model: 'grok-2-latest',
-            messages: formattedMessages,
+            model: 'grok-4.6',
+            input: promptCombinado,
           }),
           signal: AbortSignal.timeout(10000),
         });
@@ -523,10 +516,10 @@ export default async function handler(req, res) {
         }
 
         const xaiData = await xaiResponse.json();
-        const reply = xaiData.choices?.[0]?.message?.content;
+        const reply = xaiData.output || xaiData.text || xaiData.response || xaiData.choices?.[0]?.text;
 
         if (reply) {
-          console.log('[api/chat] Respuesta obtenida con éxito desde x.ai (Grok - grok-2-latest).');
+          console.log('[api/chat] Respuesta obtenida con éxito desde x.ai (Grok - grok-4.6).');
           return res.status(200).json({
             reply,
             toolCalls: [],
