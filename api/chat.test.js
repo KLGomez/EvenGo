@@ -495,3 +495,148 @@ describe('FinOps — esquema trimmeado de checkWeather', () => {
     expect(llmSize).toBeLessThan(rawSize * 0.4); // al menos 60% de reducción
   });
 });
+
+// ─── Tests Ventana Deslizante del Historial (Sliding Window) ──────────────────
+
+// Reproduce la lógica de applyWindow() del handler para tests unitarios puros.
+// Recibe el array rawHistory completo (incluyendo el último mensaje del usuario)
+// y devuelve { normalizedHistory, lastUserMsg } listos para construir contents[].
+
+function applyWindow(rawHistory, windowTurns = 10) {
+  const MAX_HISTORY_MSGS = windowTurns * 2;
+  const historyWithoutLast = rawHistory.slice(0, -1);
+
+  const windowedHistory = historyWithoutLast.length > MAX_HISTORY_MSGS
+    ? historyWithoutLast.slice(-MAX_HISTORY_MSGS)
+    : historyWithoutLast;
+
+  const normalizedHistory = windowedHistory
+    .map((msg) => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: typeof msg.content === 'string' ? msg.content : String(msg.content || '') }],
+    }))
+    .filter((m) => m.parts[0].text.trim().length > 0);
+
+  // Garantizar invariante: el primer mensaje siempre debe ser role:'user'
+  while (normalizedHistory.length > 0 && normalizedHistory[0].role !== 'user') {
+    normalizedHistory.shift();
+  }
+
+  const lastUserMsg = String(rawHistory[rawHistory.length - 1].content || '');
+  return { normalizedHistory, lastUserMsg };
+}
+
+// Helper: genera N pares user/assistant de forma determinista
+function buildHistory(turns) {
+  const history = [];
+  for (let i = 1; i <= turns; i++) {
+    history.push({ role: 'user', content: `Pregunta ${i}` });
+    history.push({ role: 'assistant', content: `Respuesta ${i}` });
+  }
+  return history;
+}
+
+describe('FinOps — Ventana Deslizante del Historial (Sliding Window)', () => {
+  it('no recorta el historial cuando está dentro de la ventana', () => {
+    // 3 pares históricos + 1 mensaje actual (ventana = 10)
+    const history = [...buildHistory(3), { role: 'user', content: 'Pregunta actual' }];
+    const { normalizedHistory } = applyWindow(history, 10);
+    // Los 3 pares (6 mensajes) deben estar íntegros
+    expect(normalizedHistory).toHaveLength(6);
+  });
+
+  it('recorta el historial cuando supera el tamaño de la ventana', () => {
+    // 15 pares históricos + 1 mensaje actual (ventana = 10)
+    const history = [...buildHistory(15), { role: 'user', content: 'Pregunta actual' }];
+    const { normalizedHistory } = applyWindow(history, 10);
+    // Solo los últimos 10 pares (20 mensajes) deben quedar
+    expect(normalizedHistory).toHaveLength(20);
+  });
+
+  it('preserva siempre el último mensaje del usuario (la pregunta actual)', () => {
+    const history = [...buildHistory(15), { role: 'user', content: 'Consulta específica' }];
+    const { lastUserMsg } = applyWindow(history, 10);
+    expect(lastUserMsg).toBe('Consulta específica');
+  });
+
+  it('el último mensaje NO forma parte de normalizedHistory (va en lastUserMsg)', () => {
+    const history = [...buildHistory(3), { role: 'user', content: 'Pregunta final' }];
+    const { normalizedHistory } = applyWindow(history, 10);
+    // normalizedHistory tiene los 3 pares (6 msgs), sin la pregunta final
+    const textos = normalizedHistory.map((m) => m.parts[0].text);
+    expect(textos).not.toContain('Pregunta final');
+  });
+
+  it('garantiza invariante: normalizedHistory siempre empieza con role "user"', () => {
+    // Construimos un historial donde el recorte dejaría "model" primero
+    // Esto ocurre cuando el turn más antiguo en la ventana es una respuesta del asistente
+    const history = [
+      { role: 'user',      content: 'Mensaje viejo 1' },
+      { role: 'assistant', content: 'Respuesta vieja 1' },
+      { role: 'user',      content: 'Mensaje viejo 2' },
+      { role: 'assistant', content: 'Respuesta vieja 2' },
+      { role: 'user',      content: 'Pregunta actual' },
+    ];
+    // Ventana de 1 turno → solo queda "Respuesta vieja 2" (model) antes del recorte
+    // El invariante debe eliminarla y dejar el array vacío (no romper Gemini)
+    const { normalizedHistory } = applyWindow(history, 1);
+    if (normalizedHistory.length > 0) {
+      expect(normalizedHistory[0].role).toBe('user');
+    }
+  });
+
+  it('con historial vacío (primera consulta) devuelve normalizedHistory vacío', () => {
+    const history = [{ role: 'user', content: 'Primera pregunta' }];
+    const { normalizedHistory, lastUserMsg } = applyWindow(history, 10);
+    expect(normalizedHistory).toHaveLength(0);
+    expect(lastUserMsg).toBe('Primera pregunta');
+  });
+
+  it('el tamaño de la ventana es configurable (windowTurns=3 → max 6 msgs de historia)', () => {
+    const history = [...buildHistory(10), { role: 'user', content: 'Pregunta actual' }];
+    const { normalizedHistory } = applyWindow(history, 3);
+    expect(normalizedHistory).toHaveLength(6); // 3 pares × 2 mensajes
+  });
+
+  it('la ventana toma los turnos MÁS RECIENTES, no los primeros', () => {
+    const history = [...buildHistory(5), { role: 'user', content: 'Pregunta actual' }];
+    // Ventana de 2 → deben quedar los pares 4 y 5 (los más recientes)
+    const { normalizedHistory } = applyWindow(history, 2);
+    expect(normalizedHistory).toHaveLength(4);
+    const textos = normalizedHistory.map((m) => m.parts[0].text);
+    expect(textos).toContain('Pregunta 4');
+    expect(textos).toContain('Respuesta 4');
+    expect(textos).toContain('Pregunta 5');
+    expect(textos).toContain('Respuesta 5');
+    expect(textos).not.toContain('Pregunta 1');
+  });
+
+  it('normaliza role "assistant" a "model" para compatibilidad con Gemini API', () => {
+    const history = [
+      { role: 'user',      content: 'Hola' },
+      { role: 'assistant', content: 'Buenos días' },
+      { role: 'user',      content: 'Pregunta actual' },
+    ];
+    const { normalizedHistory } = applyWindow(history, 10);
+    const roles = normalizedHistory.map((m) => m.role);
+    expect(roles).toContain('user');
+    expect(roles).toContain('model');
+    expect(roles).not.toContain('assistant');
+  });
+
+  it('filtra mensajes con content vacío o de espacios', () => {
+    const history = [
+      { role: 'user',      content: 'Mensaje válido' },
+      { role: 'assistant', content: '   ' },       // solo espacios → debe filtrarse
+      { role: 'user',      content: '' },           // vacío → debe filtrarse
+      { role: 'assistant', content: 'OK' },
+      { role: 'user',      content: 'Pregunta actual' },
+    ];
+    const { normalizedHistory } = applyWindow(history, 10);
+    const textos = normalizedHistory.map((m) => m.parts[0].text);
+    expect(textos).not.toContain('   ');
+    expect(textos).not.toContain('');
+    expect(textos).toContain('Mensaje válido');
+    expect(textos).toContain('OK');
+  });
+});

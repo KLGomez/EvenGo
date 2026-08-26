@@ -486,16 +486,56 @@ export default async function handler(req, res) {
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
     });
 
-    const pastHistory = rawHistory
-      .slice(0, -1)
+    // ── Ventana Deslizante del Historial (Sliding Window) ─────────────────────
+    // Acota el historial enviado al modelo a los últimos N pares de turnos.
+    // Esto mantiene el costo de contexto proporcional a la longitud real de la
+    // conversación activa y evita que diálogos extensos saturen el contexto
+    // con información irrelevante para la consulta actual.
+    //
+    // HISTORY_WINDOW_TURNS: configurable vía variable de entorno.
+    //   Valor por defecto: 10 pares (20 mensajes = ~4.000-6.000 tokens de contexto)
+    //   Incrementar si el agente necesita recordar más contexto conversacional.
+    //   Reducir para menor costo en APIs de pago por token.
+    //
+    // Invariantes que siempre preservamos:
+    //   1. El último mensaje (la pregunta actual del usuario) nunca se descarta.
+    //   2. El historial siempre empieza con role: 'user' (requerido por Gemini).
+    //   3. Nunca cortamos en medio de un par user/assistant.
+
+    const HISTORY_WINDOW_TURNS = parseInt(process.env.HISTORY_WINDOW_TURNS || '10', 10);
+    const MAX_HISTORY_MSGS = HISTORY_WINDOW_TURNS * 2; // cada "turno" = 1 user + 1 assistant
+
+    // rawHistory sin el último mensaje (la pregunta actual va en lastUserMsg)
+    const historyWithoutLast = rawHistory.slice(0, -1);
+
+    // Aplicar la ventana: tomamos solo los últimos MAX_HISTORY_MSGS mensajes
+    const windowedHistory = historyWithoutLast.length > MAX_HISTORY_MSGS
+      ? historyWithoutLast.slice(-MAX_HISTORY_MSGS)
+      : historyWithoutLast;
+
+    if (historyWithoutLast.length > MAX_HISTORY_MSGS) {
+      console.log(
+        `[api/chat] Sliding Window activa: historial recortado de ${historyWithoutLast.length} → ${windowedHistory.length} mensajes (ventana: ${HISTORY_WINDOW_TURNS} turnos)`
+      );
+    }
+
+    // Normalizar al formato de Gemini y filtrar mensajes vacíos
+    const normalizedHistory = windowedHistory
       .map((msg) => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: typeof msg.content === 'string' ? msg.content : String(msg.content || '') }],
       }))
       .filter((m) => m.parts[0].text.trim().length > 0);
 
+    // Garantizar invariante: Gemini requiere que el primer mensaje sea role:'user'.
+    // Si el recorte dejó un mensaje de 'model' primero, lo eliminamos.
+    while (normalizedHistory.length > 0 && normalizedHistory[0].role !== 'user') {
+      normalizedHistory.shift();
+      console.log('[api/chat] Sliding Window: eliminado mensaje inicial de rol "model" para cumplir invariante Gemini.');
+    }
+
     const lastUserMsg = String(rawHistory[rawHistory.length - 1].content || '');
-    const contents = [...pastHistory, { role: 'user', parts: [{ text: lastUserMsg }] }];
+    const contents = [...normalizedHistory, { role: 'user', parts: [{ text: lastUserMsg }] }];
 
     const toolCallLog = [];
     const actions = { favorites: [], invites: [], itineraries: [] };
