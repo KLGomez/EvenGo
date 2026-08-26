@@ -83,13 +83,15 @@ export default function ChatBot() {
     const query = textToSend || input;
     if (!query.trim() || isLoading) return;
 
-    const userMessage = {
-      role: 'user',
-      content: query.trim(),
-    };
-
+    const userMessage = { role: 'user', content: query.trim() };
     const updatedHistory = [...messages, userMessage];
-    setMessages(updatedHistory);
+
+    // 1. Agrega el mensaje del usuario + un mensaje vacío del asistente
+    //    que iremos llenando token a token.
+    setMessages([
+      ...updatedHistory,
+      { role: 'assistant', content: '', toolCalls: [], actions: { favorites: [], invites: [], itineraries: [] } },
+    ]);
     setInput('');
     setIsLoading(true);
 
@@ -97,58 +99,105 @@ export default function ChatBot() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedHistory,
-        }),
+        body: JSON.stringify({ messages: updatedHistory }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || data.detail || 'Error en la respuesta del servidor');
+        // Si el servidor rechaza antes de abrir el stream (400/405/500)
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || errData.detail || `HTTP ${response.status}`);
       }
 
-      // ── Persistencia Automática de Favoritos en localStorage ──────────────────
-      if (data.actions?.favorites?.length > 0) {
-        try {
-          const rawStored = localStorage.getItem('evengo_favorites');
-          const storedFavorites = rawStored ? JSON.parse(rawStored) : [];
+      // 2. Obtenemos el lector del ReadableStream SSE
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let sseBuffer = '';
 
-          let hasChanges = false;
-          data.actions.favorites.forEach((fav) => {
-            const exists = storedFavorites.some(
-              (item) => (typeof item === 'object' && item !== null ? item.id : item) === fav.id
-            );
-            if (!exists) {
-              storedFavorites.unshift(fav);
-              hasChanges = true;
-            }
-          });
+      // 3. Bucle de lectura de chunks
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          if (hasChanges) {
-            localStorage.setItem('evengo_favorites', JSON.stringify(storedFavorites));
-            window.dispatchEvent(new Event('favoritesUpdated'));
+        sseBuffer += decoder.decode(value, { stream: true });
+
+        // Un chunk puede contener varias líneas SSE → dividimos por el separador \n\n
+        const parts = sseBuffer.split('\n\n');
+
+        // La última parte puede estar incompleta → la retenemos en el buffer
+        sseBuffer = parts.pop();
+
+        for (const part of parts) {
+          // Cada parte tiene el formato:  data: {...}
+          const line = part.trim();
+          if (!line.startsWith('data:')) continue;
+
+          const raw = line.slice(5).trim();
+          let payload;
+          try {
+            payload = JSON.parse(raw);
+          } catch {
+            continue; // ignorar líneas malformadas
           }
-        } catch (e) {
-          console.error('[ChatBot] Error guardando favoritos en localStorage:', e);
+
+          if (payload.text) {
+            // 4. Concatenamos el fragmento al último mensaje (forma funcional de setState)
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              next[next.length - 1] = { ...last, content: last.content + payload.text };
+              return next;
+            });
+          }
+
+          if (payload.done) {
+            // 5. Evento de cierre: aplicamos toolCalls y actions de una sola vez
+            const { toolCalls = [], actions = { favorites: [], invites: [], itineraries: [] } } = payload;
+
+            // ── Persistencia Automática de Favoritos en localStorage ─────────
+            if (actions.favorites?.length > 0) {
+              try {
+                const rawStored = localStorage.getItem('evengo_favorites');
+                const storedFavorites = rawStored ? JSON.parse(rawStored) : [];
+                let hasChanges = false;
+                actions.favorites.forEach((fav) => {
+                  const exists = storedFavorites.some(
+                    (item) => (typeof item === 'object' && item !== null ? item.id : item) === fav.id
+                  );
+                  if (!exists) {
+                    storedFavorites.unshift(fav);
+                    hasChanges = true;
+                  }
+                });
+                if (hasChanges) {
+                  localStorage.setItem('evengo_favorites', JSON.stringify(storedFavorites));
+                  window.dispatchEvent(new Event('favoritesUpdated'));
+                }
+              } catch (e) {
+                console.error('[ChatBot] Error guardando favoritos en localStorage:', e);
+              }
+            }
+
+            // Enriquecemos el último mensaje con los metadatos del cierre
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              next[next.length - 1] = { ...last, toolCalls, actions };
+              return next;
+            });
+          }
         }
       }
-
-      const botMessage = {
-        role: 'assistant',
-        content: data.reply || 'No pude generar una respuesta en este momento.',
-        toolCalls: data.toolCalls || [],
-        actions: data.actions || { favorites: [], invites: [], itineraries: [] },
-      };
-
-      setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
       console.error('[ChatBot] Error al comunicarse con /api/chat:', error);
-      const errorMessage = {
-        role: 'assistant',
-        content: `⚠️ Ocurrió un error al consultar con el Agente (${error.message}). Por favor, intenta nuevamente.`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      // Reemplaza el mensaje vacío del asistente por el mensaje de error
+      setMessages((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = {
+          role: 'assistant',
+          content: `⚠️ Ocurrió un error al consultar con el Agente (${error.message}). Por favor, intenta nuevamente.`,
+        };
+        return next;
+      });
     } finally {
       setIsLoading(false);
     }

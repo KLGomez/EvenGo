@@ -4,9 +4,14 @@ import { createEvent } from 'ics';
 /**
  * Vercel Serverless Function: POST /api/chat
  * Asistente Virtual Conversacional de EvenGo alimentado por Gemini Flash.
- * Modelo configurable vía variable de entorno GEMINI_MODEL (default: gemini-1.5-flash).
- * Manejo directo de contents array conservando candidatos de razonamiento y respuestas de herramientas con rol 'user'.
+ * Responde mediante Server-Sent Events (SSE) para TTFB mínimo.
+ *
+ * Protocolo SSE emitido:
+ *   data: {"text":"<fragmento>"}\n\n   → chunk de texto
+ *   data: {"done":true,"toolCalls":[...],"actions":{...}}\n\n  → cierre exitoso
+ *   data: {"error":"<mensaje>"}\n\n    → cierre con error
  */
+
 
 const LINDA_API = 'https://linda.buenosaires.gob.ar/api/frontend/events/filter';
 const BA_LAT = -34.6037;
@@ -339,6 +344,31 @@ REGLAS DE ACTUACIÓN:
 3. CRÍTICO: SIEMPRE que menciones un evento en tu respuesta, usa el campo "anchorLink" del evento (tiene el formato #event-{id}) para construir el enlace Markdown: [Nombre del Evento](anchorLink). NUNCA uses la propiedad "url" externa (la de linda.buenosaires.gob.ar) en el texto de tu respuesta, ya que eso saca al usuario de EvenGo. El anchorLink lleva al usuario directamente a la tarjeta del evento dentro de la aplicación.
 4. Sé amable, conciso y responde en español con formato Markdown pulido.`;
 
+// ─── HELPERS SSE ──────────────────────────────────────────────────────────────
+
+/**
+ * Escribe un evento SSE en el response.
+ * @param {import('http').ServerResponse} res
+ * @param {object} payload
+ */
+function sseWrite(res, payload) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+/**
+ * Configura los headers de SSE (solo si no se enviaron ya).
+ * @param {import('http').ServerResponse} res
+ */
+function initSSE(res) {
+  if (!res.headersSent) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+  }
+}
+
 // ─── REINTENTOS AUTOMÁTICOS PARA ERRORES TEMPORALES DE CAPACIDAD ──────────────
 
 async function generateContentWithRetry(model, payload, maxRetries = 3) {
@@ -356,7 +386,7 @@ async function generateContentWithRetry(model, payload, maxRetries = 3) {
 
       if (isTransient && attempt < maxRetries) {
         console.warn(`[api/chat] Error de capacidad en Gemini (${attempt}/${maxRetries}): ${err.message}. Reintentando en ${attempt * 600}ms...`);
-        await new Promise((res) => setTimeout(res, attempt * 600));
+        await new Promise((r) => setTimeout(r, attempt * 600));
       } else {
         throw err;
       }
@@ -370,7 +400,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Content-Type', 'application/json');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
@@ -388,16 +417,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El campo "messages" es requerido.' });
     }
 
-    // ── PLAN A: Proveedor Primario (Gemini) ──────────────────────────────────
+    // ── PLAN A: Proveedor Primario (Gemini) con generateContentStream ─────────
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('Configuración incompleta: Falta GEMINI_API_KEY.');
-    }
+    if (!apiKey) throw new Error('Configuración incompleta: Falta GEMINI_API_KEY.');
 
-    // Sanitización de modelo Gemini
     const modelName = 'gemini-flash-latest';
-
-    console.log(`[api/chat] Inicializando modelo Gemini: "${modelName}"`);
+    console.log(`[api/chat] Inicializando modelo Gemini streaming: "${modelName}"`);
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
@@ -406,7 +431,6 @@ export default async function handler(req, res) {
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
     });
 
-    // Sanitización de historial previo
     const pastHistory = rawHistory
       .slice(0, -1)
       .map((msg) => ({
@@ -416,32 +440,24 @@ export default async function handler(req, res) {
       .filter((m) => m.parts[0].text.trim().length > 0);
 
     const lastUserMsg = String(rawHistory[rawHistory.length - 1].content || '');
-
-    const contents = [
-      ...pastHistory,
-      { role: 'user', parts: [{ text: lastUserMsg }] },
-    ];
+    const contents = [...pastHistory, { role: 'user', parts: [{ text: lastUserMsg }] }];
 
     const toolCallLog = [];
     const actions = { favorites: [], invites: [], itineraries: [] };
     const MAX_TOOL_HOPS = 5;
     let hops = 0;
 
+    // Resolvemos tool-calls de forma NO-streaming en los saltos intermedios.
     while (hops < MAX_TOOL_HOPS) {
-      const result = await generateContentWithRetry(model, { contents });
-      const functionCalls = result.response.functionCalls();
+      const midResult = await generateContentWithRetry(model, { contents });
+      const functionCalls = midResult.response.functionCalls();
 
       if (!functionCalls || functionCalls.length === 0) {
-        return res.status(200).json({
-          reply: result.response.text(),
-          toolCalls: toolCallLog,
-          actions,
-        });
+        break;
       }
 
-      // Preservar el candidato generado por el modelo
-      if (result.response.candidates?.[0]?.content) {
-        contents.push(result.response.candidates[0].content);
+      if (midResult.response.candidates?.[0]?.content) {
+        contents.push(midResult.response.candidates[0].content);
       }
 
       const call = functionCalls[0];
@@ -469,7 +485,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // Enviar la respuesta de la función con role 'user'
       contents.push({
         role: 'user',
         parts: [{ functionResponse: { name: call.name, response: toolResult } }],
@@ -478,21 +493,30 @@ export default async function handler(req, res) {
       hops += 1;
     }
 
-    const finalResult = await generateContentWithRetry(model, { contents });
+    // ── Turno final: generamos el texto en modo STREAM ────────────────────────
+    initSSE(res);
 
-    return res.status(200).json({
-      reply: finalResult.response.text(),
-      toolCalls: toolCallLog,
-      actions,
-    });
+    const streamResult = await model.generateContentStream({ contents });
+
+    for await (const chunk of streamResult.stream) {
+      const chunkText = chunk.text();
+      if (chunkText) {
+        sseWrite(res, { text: chunkText });
+      }
+    }
+
+    sseWrite(res, { done: true, toolCalls: toolCallLog, actions });
+    res.end();
+    return;
+
   } catch (geminiError) {
     console.error('[api/chat] Error en proveedor primario (Gemini):', geminiError.message || geminiError);
 
-    // ── PLAN B: Fallback a Groq (llama-3.1-8b-instant) ──────────────────────────
+    // ── PLAN B: Fallback a Groq con stream: true ──────────────────────────────
     const groqApiKey = process.env.GROQ_API_KEY || process.env.FALLBACK_API_KEY;
     if (groqApiKey) {
       try {
-        console.log('[api/chat] Groq: Intentando respuesta vía Fallback (Groq llama-3.1-8b-instant)...');
+        console.log('[api/chat] Groq: Intentando respuesta vía Fallback streaming (llama-3.1-8b-instant)...');
 
         const groqMessages = [
           { role: 'system', content: SYSTEM_INSTRUCTION },
@@ -511,28 +535,59 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model: 'llama-3.1-8b-instant',
             messages: groqMessages,
+            stream: true,
           }),
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(15000),
         });
 
         if (!groqResponse.ok) {
           const errText = await groqResponse.text();
-          throw new Error(`[api/chat] Groq API respondió con status ${groqResponse.status}: ${errText}`);
+          throw new Error(`Groq API respondió con status ${groqResponse.status}: ${errText}`);
         }
 
-        const groqData = await groqResponse.json();
-        const reply = groqData.choices?.[0]?.message?.content;
+        initSSE(res);
 
-        if (reply) {
-          console.log('[api/chat] Groq: Respuesta obtenida con éxito (Plan B - llama-3.1-8b-instant).');
-          return res.status(200).json({
-            reply,
-            toolCalls: [],
-            actions: { favorites: [], invites: [], itineraries: [] },
-          });
-        } else {
-          throw new Error('[api/chat] Groq: Respuesta vacía o formato inesperado.');
+        const decoder = new TextDecoder('utf-8');
+        const reader = groqResponse.body.getReader();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('data:')) continue;
+            const raw = trimmed.slice(5).trim();
+            if (raw === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(raw);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) sseWrite(res, { text: content });
+            } catch {}
+          }
         }
+
+        if (buffer.trim().startsWith('data:')) {
+          const raw = buffer.trim().slice(5).trim();
+          if (raw && raw !== '[DONE]') {
+            try {
+              const parsed = JSON.parse(raw);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) sseWrite(res, { text: content });
+            } catch {}
+          }
+        }
+
+        console.log('[api/chat] Groq: Stream completado con éxito.');
+        sseWrite(res, { done: true, toolCalls: [], actions: { favorites: [], invites: [], itineraries: [] } });
+        res.end();
+        return;
+
       } catch (groqError) {
         console.error('[api/chat] Groq: Error en proveedor de Fallback:', groqError.message || groqError);
       }
@@ -540,12 +595,15 @@ export default async function handler(req, res) {
       console.warn('[api/chat] Groq: Variable GROQ_API_KEY no configurada. Omitiendo Plan B.');
     }
 
-    // ── PLAN C: Graceful Degradation (Respuesta estática de contingencia) ─────
+    // ── PLAN C: Graceful Degradation (un único chunk SSE de contingencia) ─────
     console.error('[api/chat] Activando respuesta estática de contingencia (Plan C).');
-    return res.status(200).json({
-      reply: '¡Uf! Estoy procesando demasiadas consultas y agoté mis créditos de IA temporalmente. 😅 Mientras recupero energía, te invito a explorar las tarjetas de eventos utilizando los filtros de arriba.',
-      toolCalls: [],
-      actions: { favorites: [], invites: [], itineraries: [] },
+
+    initSSE(res);
+
+    sseWrite(res, {
+      text: '¡Uf! Estoy procesando demasiadas consultas y agoté mis créditos de IA temporalmente. 😅 Mientras recupero energía, te invito a explorar las tarjetas de eventos utilizando los filtros de arriba.',
     });
+    sseWrite(res, { done: true, toolCalls: [], actions: { favorites: [], invites: [], itineraries: [] } });
+    res.end();
   }
 }
