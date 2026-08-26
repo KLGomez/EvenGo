@@ -18,7 +18,7 @@
 
 ---
 
-> **EvenGo no es un CRUD de eventos.** Es un sistema de agente autónomo con herramientas reales, streaming de respuestas, fallback automático entre proveedores de IA, y una capa de optimización FinOps que reduce el consumo de tokens entre un **60% y un 77%** por llamada. Todo deployado en edge con Vercel Serverless.
+> **EvenGo no es solo un CRUD de eventos.** Es un sistema completo con un agente autónomo con herramientas reales, streaming de respuestas, fallback automático entre proveedores de IA, y una capa de optimización FinOps que reduce el consumo de tokens entre un **60% y un 77%** por llamada. Todo deployado en edge con Vercel Serverless.
 
 ---
 
