@@ -67,6 +67,7 @@ async function searchEvents({ category, barrio, isFree, query } = {}) {
       );
     }
 
+    // Objeto COMPLETO → se guarda en toolCallLog y se entrega al frontend
     const results = events.slice(0, 8).map((e) => ({
       id: e.id || `linda-${Date.now()}`,
       title: e.title,
@@ -78,7 +79,26 @@ async function searchEvents({ category, barrio, isFree, query } = {}) {
       anchorLink: `#event-${e.id}`,
     }));
 
-    return { count: results.length, events: results, source: 'live' };
+    // ── FinOps: Objeto SLIM → lo único que necesita el LLM para razonar ────────
+    // Elimina: id interno, url externa, source. Trunca descripción a 150 chars.
+    // Ahorro estimado: ~40-60% de tokens por herramienta de eventos.
+    const resultsForLLM = results.map((e) => ({
+      titulo: e.title,
+      fecha: e.date,
+      barrio: e.barrio,
+      lugar: e.address,
+      precio: e.price,
+      anchorLink: e.anchorLink,
+      ...(e.description
+        ? { descripcion: String(e.description).slice(0, 150) }
+        : {}),
+    }));
+
+    return {
+      count: results.length,
+      eventos: resultsForLLM,   // ← payload al LLM (slim)
+      _fullEvents: results,      // ← payload al frontend (marcado con _ para excluirlo en el trim de abajo)
+    };
   } catch (err) {
     return { count: 0, events: [], source: 'unavailable', error: err.message };
   }
@@ -105,14 +125,43 @@ async function checkWeather({ date } = {}) {
     }
 
     const rainProb = data.daily.precipitation_probability_max[i];
+    const weatherCode = data.daily.weathercode?.[i] ?? 0;
+    const tempMax = data.daily.temperature_2m_max[i];
+    const tempMin = data.daily.temperature_2m_min[i];
+    const willRain = rainProb >= 50;
+
+    // ── FinOps: condición WMO → string semántico legible por el LLM ─────────
+    // Elimina: lat/lon, elevación, arrays horarios, 'source', booleano willRain.
+    // El LLM necesita UNA frase de condición, no un código numérico crudo.
+    // Ahorro estimado: ~70% de tokens respecto al JSON completo de Open-Meteo.
+    const condicion = (() => {
+      if (weatherCode === 0)              return 'Despejado ☀️';
+      if (weatherCode <= 3)              return 'Parcialmente nublado 🌤️';
+      if (weatherCode <= 48)             return 'Nublado / Niebla ☁️';
+      if (weatherCode <= 67)             return 'Lluvia 🌧️';
+      if (weatherCode <= 77)             return 'Nieve / Granizo ❄️';
+      if (weatherCode <= 82)             return 'Lluvias intermitentes 🌦️';
+      return 'Tormenta eléctrica ⛈️';
+    })();
+
+    // Consejo de vestimenta pre-calculado aquí para no gastar tokens en razonamiento del LLM
+    const consejo_ropa = willRain
+      ? 'Llevar paraguas o piloto impermeable.'
+      : tempMax > 26
+      ? 'Ropa fresca y protector solar.'
+      : tempMin < 13
+      ? 'Abrigar con campera liviana o sweater.'
+      : 'Ropa cómoda, clima agradable.';
 
     return {
-      date: targetDate,
-      tempMaxC: data.daily.temperature_2m_max[i],
-      tempMinC: data.daily.temperature_2m_min[i],
-      rainProbability: rainProb,
-      willRain: rainProb >= 50,
-      source: 'live',
+      fecha: targetDate,
+      temp_max_c: tempMax,
+      temp_min_c: tempMin,
+      prob_lluvia_pct: rainProb,
+      condicion,
+      consejo_ropa,
+      // _raw: usado internamente por planItinerary para la tarjeta del frontend
+      _raw: { willRain, rainProbability: rainProb, tempMaxC: tempMax, tempMinC: tempMin },
     };
   } catch (err) {
     return { date: targetDate, source: 'unavailable', error: err.message };
@@ -185,14 +234,16 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
     checkWeather({ date: targetDate }),
   ]);
 
-  let events = eventsResult.events || [];
+  // planItinerary usa los datos COMPLETOS de las tools (campos _) porque
+  // es una función interna — no los recibe vía LLM sino directamente.
+  let events = eventsResult._fullEvents || eventsResult.eventos || [];
 
   if (barrio && events.length > 0) {
     const b = barrio.toLowerCase();
     const matched = events.filter(
       (e) =>
         (e.barrio || '').toLowerCase().includes(b) ||
-        (e.address || '').toLowerCase().includes(b)
+        (e.address || e.lugar || '').toLowerCase().includes(b)
     );
     if (matched.length > 0) events = matched;
   }
@@ -208,20 +259,24 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
     title: primaryEvent.title,
     date: targetDate,
     time: primaryEvent.time || '19:00',
-    location: primaryEvent.address || primaryEvent.barrio || 'Buenos Aires',
+    location: primaryEvent.address || primaryEvent.lugar || primaryEvent.barrio || 'Buenos Aires',
   });
 
-  const willRain = weatherResult.willRain || false;
-  const tempMax = weatherResult.tempMaxC ?? 22;
-  const tempMin = weatherResult.tempMinC ?? 14;
+  // Lee los datos crudos del clima desde _raw (campo interno, no expuesto al LLM)
+  const raw = weatherResult._raw || {};
+  const willRain = raw.willRain ?? false;
+  const tempMax = raw.tempMaxC ?? weatherResult.temp_max_c ?? 22;
+  const tempMin = raw.tempMinC ?? weatherResult.temp_min_c ?? 14;
 
-  const clothingTip = willRain
-    ? '⚠️ Alta probabilidad de lluvia: Se sugiere llevar paraguas o piloto.'
-    : tempMax > 26
-    ? '☀️ Día caluroso: Se recomienda ropa fresca e hidratación.'
-    : tempMin < 13
-    ? '🌙 Noche fresca: Se aconseja llevar un abrigo liviano.'
-    : '🌤️ Clima favorable para paseos al aire libre.';
+  // clothingTip: reutiliza el consejo_ropa pre-calculado en checkWeather
+  const clothingTip = weatherResult.consejo_ropa
+    ?? (willRain
+      ? '⚠️ Alta probabilidad de lluvia: Se sugiere llevar paraguas o piloto.'
+      : tempMax > 26
+      ? '☀️ Día caluroso: Se recomienda ropa fresca e hidratación.'
+      : tempMin < 13
+      ? '🌙 Noche fresca: Se aconseja llevar un abrigo liviano.'
+      : '🌤️ Clima favorable para paseos al aire libre.');
 
   return {
     success: true,
@@ -232,7 +287,7 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
       weather: {
         tempMaxC: tempMax,
         tempMinC: tempMin,
-        rainProbability: weatherResult.rainProbability ?? 0,
+        rainProbability: raw.rainProbability ?? weatherResult.prob_lluvia_pct ?? 0,
         willRain,
       },
       primaryEvent,
@@ -244,7 +299,7 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
       ],
       logistics: {
         clothingTip,
-        transportTip: `Dirección principal: ${primaryEvent.address || 'Buenos Aires'}`,
+        transportTip: `Dirección principal: ${primaryEvent.address || primaryEvent.lugar || 'Buenos Aires'}`,
       },
       calendarInvite: calendarInvite.generated ? calendarInvite : null,
     },
@@ -485,9 +540,26 @@ export default async function handler(req, res) {
         }
       }
 
+      // ── FinOps: separación de capas ─────────────────────────────────────────
+      // trimForLLM() elimina cualquier campo prefijado con "_" (datos para el
+      // frontend solamente: _fullEvents, _raw, etc.) y el campo "action" (señal
+      // para el cliente, no aporta razonamiento al modelo).
+      // El toolResult COMPLETO se conserva en toolCallLog para el frontend.
+      const trimForLLM = (obj) => {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+        return Object.fromEntries(
+          Object.entries(obj)
+            .filter(([k]) => !k.startsWith('_') && k !== 'action')
+            .map(([k, v]) => [k, typeof v === 'object' && v !== null && !Array.isArray(v)
+              ? trimForLLM(v)
+              : v
+            ])
+        );
+      };
+
       contents.push({
         role: 'user',
-        parts: [{ functionResponse: { name: call.name, response: toolResult } }],
+        parts: [{ functionResponse: { name: call.name, response: trimForLLM(toolResult) } }],
       });
 
       hops += 1;
