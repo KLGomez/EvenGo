@@ -1,174 +1,250 @@
-# 🗺️ EvenGo — Agenda, Radar Cultural & PWA de Buenos Aires
+﻿<div align="center">
 
-> **La PWA definitiva para descubrir, analizar y guardar los eventos culturales, musicales, deportivos y gastronómicos más relevantes de la Ciudad de Buenos Aires en tiempo real, impulsada por un Agente Ejecutivo Autónomo de IA.**
+# 🗺️ EvenGo — Smart Cultural Event Planner
 
-[![CI](https://github.com/KLGomez/EvenGo/actions/workflows/ci.yml/badge.svg)](https://github.com/KLGomez/EvenGo/actions/workflows/ci.yml)
-[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Gemini AI](https://img.shields.io/badge/Gemini-Flash-8E75FF?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![PWA](https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
-[![Vercel](https://img.shields.io/badge/Vercel-Serverless-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
+**PWA interactiva con IA Conversacional, Streaming en tiempo real y Arquitectura de Alta Disponibilidad para la agenda cultural de Buenos Aires.**
 
----
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)](https://vitejs.dev/)
+[![Node.js](https://img.shields.io/badge/Node.js-Serverless-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Vercel](https://img.shields.io/badge/Vercel-Serverless-000000?style=flat-square&logo=vercel)](https://vercel.com/)
+[![Google Gemini](https://img.shields.io/badge/Gemini-Flash-4285F4?style=flat-square&logo=google)](https://ai.google.dev/)
+[![Groq](https://img.shields.io/badge/Groq-llama--3.1-F55036?style=flat-square)](https://groq.com/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat-square&logo=tailwindcss)](https://tailwindcss.com/)
+[![Vitest](https://img.shields.io/badge/Vitest-67%20tests-6E9F18?style=flat-square&logo=vitest)](https://vitest.dev/)
+[![PWA](https://img.shields.io/badge/PWA-Installable-5A0FC8?style=flat-square&logo=pwa)](https://web.dev/progressive-web-apps/)
 
-## 📌 Descripción General
-
-**EvenGo** es una **Progressive Web App (PWA)** de alto rendimiento diseñada para revolucionar la manera en que residentes y turistas exploran la vibrante oferta cultural de Buenos Aires.
-
-Construida con un enfoque **Mobile First** y estética *Dark Glassmorphism*, la plataforma combina cuatro pilares principales:
-
-- **Motor de Búsqueda y Filtrado Reactivo** multicriterio sobre eventos en tiempo real.
-- **Dashboard Analítico "Radar Cultural"** con gráficos interactivos por categoría y zona.
-- **Capacidades nativas de PWA** instalable y con soporte offline (Service Worker + Workbox).
-- **Agente Ejecutivo Autónomo de IA** (Gemini Flash) capaz de planificar salidas completas, combinar datos de eventos con el clima en vivo y generar pases de calendario `.ics` con un solo clic.
+</div>
 
 ---
 
-## ✨ Funcionalidades Principales
-
-### 🤖 Agente Ejecutivo Autónomo & Concierge de IA
-
-El widget **ChatBot** flotante es el corazón interactivo de EvenGo. Utiliza **Gemini Flash** con **Function Calling nativo** (multi-hop autónomo de hasta 5 pasos) para ejecutar herramientas reales sin guiones fijos.
-
-**Herramientas disponibles:**
-
-| Herramienta | Descripción |
-| :--- | :--- |
-| `search_events` | Busca eventos en la agenda del GCBA por categoría, barrio, precio y palabra clave. |
-| `check_weather` | Consulta el pronóstico en tiempo real desde Open-Meteo para Buenos Aires. |
-| `save_favorite` | Guarda un evento en los favoritos del usuario vía `localStorage`. |
-| `generate_calendar_invite` | Genera una invitación `.ics` (RFC 5545) descargable en memoria. |
-| `plan_itinerary` | Planificación autónoma completa: combina eventos + clima + cronograma + `.ics`. |
-
-**Capacidades del agente:**
-- **Planificación autónoma de itinerarios (`plan_itinerary`)**: evalúa simultáneamente la agenda cultural, el pronóstico meteorológico, consejos de vestimenta y transporte, y un cronograma paso a paso.
-- **Tarjetas UI interactivas**: los itinerarios se renderizan como tarjetas visuales ricas con insignias de clima, eventos alternativos y botón de descarga de calendario.
-- **Sincronización atómica con `localStorage`**: al guardar un favorito, el agente dispara el evento global `favoritesUpdated` para refrescar la UI al instante.
-- **Markdown enriquecido**: las respuestas del agente usan `react-markdown` con componentes personalizados. Los anchorLinks (`#event-{id}`) hacen scroll hasta la tarjeta del evento y la resaltan con animación visual.
-- **Plan B automático (fallback a Grok)**: si Gemini falla, el sistema intenta continuar con **x.ai (Grok 4.6)** vía `/v1/responses`. Si también falla, activa una respuesta estática de contingencia **(Plan C)**, garantizando cero pantallas de error para el usuario.
+> **EvenGo no es un CRUD de eventos.** Es un sistema de agente autónomo con herramientas reales, streaming de respuestas, fallback automático entre proveedores de IA, y una capa de optimización FinOps que reduce el consumo de tokens entre un **60% y un 77%** por llamada. Todo deployado en edge con Vercel Serverless.
 
 ---
 
-### 🔍 Filtrado Combinable & Búsqueda Avanzada
+## ✨ Características Principales
 
-- **Motor multicriterio reactivo**: filtrado simultáneo por **Categoría** (Cultural, Musical, Deportivo, Gastronomía), **Zona / Barrio** (Palermo, San Telmo, Belgrano, Recoleta, Obelisco/Centro, etc.), **Rango de Fecha** (Hoy, Este fin de semana, Esta semana, Próximamente) y **Precio** (Gratis / Pago).
-- **Búsqueda full-text**: búsqueda instantánea por palabras clave en títulos y descripciones con debounce visual.
-- **Filtro temporal inteligente** (`isEventUpcoming`): descarta automáticamente eventos ya finalizados respetando tanto la fecha como la hora de inicio, con soporte para los formatos `YYYY-MM-DD` y `DD/MM/YYYY`.
-
----
-
-### ⭐ "Mi Ruta" — Planner Personal de Favoritos
-
-- **Persistencia local**: los eventos seleccionados se guardan en `localStorage` del navegador, sin necesidad de cuenta ni backend.
-- **Drawer deslizable**: interfaz lateral con lista de favoritos guardados, botón de eliminación por ítem y vaciado total.
-- **Contador dinámico**: la Navbar muestra en tiempo real la cantidad de favoritos activos.
-
----
-
-### 📊 Dashboard "Radar Cultural" & Analytics
-
-- **Ruta dedicada** (`/radar-cultural`) con visualizaciones avanzadas usando **Recharts**.
-- **Tipos de gráfico**: Radar temático, Donut de distribución por categoría, y Barras por zona/barrio.
-- **Exportación nativa a CSV**: con BOM UTF-8 (`\uFEFF`) para compatibilidad total con Microsoft Excel.
-- **Banner de estado de fuente de datos** (`DataSourceBanner`): informa al usuario en tiempo real si los eventos provienen de la API oficial del GCBA o de los datos de demostración (mocks).
+| Área | Capacidad |
+|---|---|
+| 🤖 **IA Agentic** | Ciclo autónomo de tool-calling (hasta 5 hops) con Gemini + function declarations |
+| 📡 **Streaming SSE** | Respuesta token a token vía Server-Sent Events — TTFB percibido < 100ms |
+| 🔄 **Alta Disponibilidad** | Fallback automático Plan A → B → C sin intervención del usuario |
+| 📅 **Calendario .ics** | Generación de invitaciones descargables con la librería `ics` |
+| 🌦️ **Clima real** | Pronóstico de Open-Meteo con traducción semántica del WMO weathercode |
+| 🏙️ **Datos live** | Integración con la API interna del portal cultural GCBA (linda.buenosaires.gob.ar) |
+| 💾 **Persistencia** | Favoritos en `localStorage` con sincronización vía `CustomEvent` entre componentes |
+| 📱 **PWA Instalable** | Manifest + Service Worker (Workbox) — funciona offline con datos en caché |
+| 🔍 **Filtros en tiempo real** | Búsqueda, categoría, barrio y precio sin petición de red adicional |
+| 💡 **FinOps** | `trimForLLM()` separa el payload del frontend del payload del modelo |
 
 ---
 
-### ⚡ PWA & Capacidades Offline
-
-- **Instalable multiplataforma**: funciona como app nativa en iOS, Android, Windows y macOS gracias al `manifest.webmanifest` generado automáticamente.
-- **Service Worker con Workbox** (`vite-plugin-pwa`): estrategia `autoUpdate` para cacheo adaptativo y actualización en segundo plano, garantizando navegación rápida incluso ante pérdida de conectividad.
-
----
-
-## 🧠 Arquitectura del Agente (Function Calling Multi-hop)
+## 🏗️ Arquitectura del Sistema
 
 ```
-[ Usuario — ChatBot UI ]
-       │  "Armame un plan para este sábado en Palermo"
-       ▼
-[ POST /api/chat ] ──► [ Gemini Flash (gemini-flash-latest) ]
-                                │
-               ┌────────────────┼────────────────┐
-               ▼                ▼                ▼
-       searchEvents()    checkWeather()   planItinerary()
-       (API Linda GCBA)   (Open-Meteo)    (herramienta compuesta)
-               │                │                │
-               └────────────────┼────────────────┘
-                                ▼
-                       generateCalendarInvite()
-                                │ (.ics — Base64 Data URI)
-                                ▼
-                  [ Respuesta UI: Tarjeta + Botón .ics ]
-
-── En caso de fallo de Gemini ──────────────────────────────
-       ▼
-[ Plan B: x.ai Grok 4.6 ]  (POST https://api.x.ai/v1/responses)
-       │  prompt combinado (SYSTEM_INSTRUCTION + historial)
-       ▼
-[ Plan C: Respuesta estática de contingencia (sin error visible) ]
++------------------------------------------------------------------+
+|                        CLIENTE (React PWA)                       |
+|                                                                  |
+|  ChatBot.jsx --SSE ReadableStream--> Render token a token        |
+|  useEvents.js --fetch--> /api/events --> EventGrid / FilterPanel |
++---------------------+--------------------------------------------+
+                       | HTTPS / Vercel Edge
++---------------------v--------------------------------------------+
+|                  SERVERLESS FUNCTIONS (Vercel)                   |
+|                                                                  |
+|  /api/chat.js                                                    |
+|    +-- Plan A: Gemini Flash (generateContentStream)              |
+|    |     +-- Tool Loop (max 5 hops, non-stream) -> SSE stream    |
+|    +-- Plan B: Groq llama-3.1-8b (stream: true)                 |
+|    +-- Plan C: Graceful degradation (chunk SSE estatico)         |
+|                                                                  |
+|  /api/events.js                                                  |
+|    +-- In-memory cache (TTL: 10 min, warm instance)              |
+|    +-- LIVE: linda.buenosaires.gob.ar/api/frontend/events/filter |
+|    +-- FALLBACK: 10 mock records normalizados                    |
++------------------------------------------------------------------+
 ```
 
 ---
 
-## 🔄 Flujo ETL de Datos (GCBA → EvenGo)
+## 🤖 Arquitectura de IA & Resiliencia
 
-EvenGo es intencionalmente **stateless**: no persiste eventos en una base de datos propia. Resincroniza contra la fuente oficial (API Linda del GCBA) en cada request, con caché en memoria de corto plazo. Esta es una **decisión de arquitectura** tomada para:
+### Plan A / B / C — Fallback Automático
 
-1. **Eliminar staleness**: los eventos de Buenos Aires cambian diariamente; una DB propia requeriría un job de sincronización adicional sin reducir latencia perceptible.
-2. **Minimizar infraestructura**: Serverless + caché en memoria (TTL 10 min) cubre el 80 %+ del tráfico sin costo operativo.
-3. **Resiliencia por diseño**: si la API falla, un conjunto de datos mock con estructura idéntica garantiza continuidad de la experiencia.
+EvenGo implementa un patrón de **Alta Disponibilidad de tres niveles** para el agente conversacional. La conmutación es completamente invisible para el usuario final.
 
 ```
-[ API Linda (GCBA) ]              [ Open-Meteo ]
-        │                               │
-        │  fetch (limit: 200, timeout: 10s)  │ fetch (timeout: 8s)
-        ▼                               ▼
-[ extractFromLinda() ]         [ checkWeather() ]
-        │                               │
-        │  Fallback automático          │
-        ▼  si la API falla              │
-[ MOCK_RECORDS ]                        │
-        │                               │
-        ▼                               │
-[ normalizeRecord() ]                   │
-  ├── stripHtml()                       │
-  ├── classifyCategory()  ◄─── CLASSIFICATION_RULES
-  └── normalizeLocation()               │
-        │                               │
-        ▼                               ▼
-[ Caché en memoria (TTL: 10 min) ] ─────┘
-        │
-        ▼
-[ GET /api/events ] ─────────────────► [ React Frontend ]
-                                              │
-                                    useEvents() → filtros reactivos
-                                    useEventAnalytics() → Recharts
-                                              │
-                                    [ EventCard / Dashboard ]
+Request /api/chat
+      |
+      v
+[PLAN A]  --OK--> Gemini Flash (gemini-flash-latest)
+(Primario)        Tool-calling nativo + SSE stream
+      |
+      | Error 503/429/timeout
+      v
+[PLAN B]  --OK--> Groq llama-3.1-8b-instant
+(Fallback)        stream: true, OpenAI-compatible API
+      |
+      | Error
+      v
+[PLAN C]  ------> Mensaje de contingencia via SSE.
+(Graceful         El stream cierra limpiamente.
+ Degrade)         Cero errores sin manejar hacia el usuario.
 ```
+
+**Retry con backoff exponencial (Plan A):** Los errores transitorios de capacidad (`503`, `429`, `high demand`) activan hasta 3 reintentos automáticos con espera progresiva de `600ms × numero_de_intento`.
 
 ---
 
-## 🛠️ Stack Tecnológico
+### Streaming con Server-Sent Events (SSE)
 
-| Capa | Tecnología | Versión | Descripción |
-| :--- | :--- | :---: | :--- |
-| **Core Framework** | React | 19 | UI reactiva con Hooks avanzados (`useMemo`, `useCallback`, `useEffect`). |
-| **Agente de IA (Plan A)** | Gemini Flash | `gemini-flash-latest` | LLM con Function Calling nativo, reintentos automáticos y preservación de candidatos de razonamiento. |
-| **Agente de IA (Plan B)** | x.ai Grok | `grok-4.6` | Fallback automático vía endpoint `/v1/responses` si Gemini no está disponible. |
-| **Build System** | Vite | 8 | Bundler de ultra alta velocidad con HMR. |
-| **Routing** | React Router DOM | 7 | SPA routing con dos rutas: `/` (agenda) y `/radar-cultural` (dashboard). |
-| **Styling** | Tailwind CSS | v4 | Framework CSS utilitario, Dark Mode Glassmorphism. |
-| **Markdown** | react-markdown | 10 | Renderizado de respuestas del agente con componentes personalizados y anchorLinks interactivos. |
-| **Analytics & Data** | Recharts | 3 | Gráficos SVG interactivos (Radar, Donut, Barras). |
-| **Calendario .ics** | ics | 3 | Generación de invitaciones iCalendar RFC 5545 en memoria (Base64 Data URI). |
-| **PWA & Offline** | vite-plugin-pwa / Workbox | 1 | Service Worker autogestionado con estrategia `autoUpdate`. |
-| **Backend & ETL** | Vercel Serverless Functions | — | Endpoints Node.js: `/api/events` (ETL + caché) y `/api/chat` (orquestador IA). |
-| **Linter** | oxlint | 1 | Linter de alto rendimiento (Rust-based). |
-| **Testing** | Vitest | 4 | Tests unitarios para lógica ETL, fechas y hooks. |
-| **CI/CD** | GitHub Actions | — | Pipeline automático: lint + tests + build en cada push/PR a `main` y `develop`. |
+El backend **no espera a que el modelo termine** de generar la respuesta completa. Abre una conexión SSE inmediatamente y transmite cada token en cuanto llega del modelo. El resultado es una experiencia de "escritura en vivo" con TTFB percibido cercano a cero.
+
+**Protocolo SSE emitido por `/api/chat`:**
+
+```
+data: {"text":"Hola! Encontre"}\n\n
+data: {"text":" 3 eventos en Palermo"}\n\n
+data: {"text":" para este sabado:"}\n\n
+data: {"done":true,"toolCalls":[...],"actions":{...}}\n\n
+```
+
+**Flujo del ciclo agentic:**
+
+```javascript
+// Fase 1: Tool-calls (NON-stream — limitación del protocolo functionResponse)
+while (hops < MAX_TOOL_HOPS) {
+  const result = await generateContent({ contents });     // respuesta completa
+  if (!result.functionCalls()) break;
+  const toolResult = await executeTool(call.name, call.args);
+  contents.push({ functionResponse: trimForLLM(toolResult) });
+}
+
+// Fase 2: Turno textual final (STREAM — el usuario ve esto token a token)
+const stream = await model.generateContentStream({ contents });
+initSSE(res);   // writeHead 200 + Content-Type: text/event-stream
+for await (const chunk of stream.stream) {
+  res.write(`data: ${JSON.stringify({ text: chunk.text() })}\n\n`);
+}
+res.write(`data: ${JSON.stringify({ done: true, toolCalls, actions })}\n\n`);
+res.end();
+```
+
+**En el cliente (`ChatBot.jsx`):** Se inserta un mensaje vacío del asistente en el estado *antes* de hacer el fetch. Cada `payload.text` se concatena usando la forma funcional de `setState`, evitando closures stale en el loop async. Las tarjetas de itinerario y botones `.ics` aparecen únicamente cuando llega el evento `done`.
+
+---
+
+### Integración con API GCBA — Reverse Engineering
+
+La plataforma **Linda** (`linda.buenosaires.gob.ar`) es el portal cultural oficial del Gobierno de la Ciudad de Buenos Aires. Su API de backend carece de documentación pública; fue identificada mediante inspección del tráfico de red del portal.
+
+```
+Endpoint descubierto:
+  GET https://linda.buenosaires.gob.ar/api/frontend/events/filter?limit=200
+
+Response schema (inferido por observacion):
+  {
+    events:     [ { id, title, description, imageUrl, fechaInicio, fechaFin,
+                    horarios, etiquetas, ubicacion, barrio, pathAlias,
+                    slug, acceso, precio, drupalNid, componentes, ... } ],
+    pagination: { page, limit, total, totalPages },
+    filters:    { ... }
+  }
+```
+
+La capa `normalizeRecord()` transforma este schema al schema propio de EvenGo:
+
+- **HTML stripping:** limpia tags y entidades HTML de las descripciones
+- **Normalización de barrios:** mapeo de keys `snake_case` (`villa_crespo`) a nombres legibles
+- **Ajuste de zona horaria:** horas en UTC ajustadas a GMT-3 (Argentina)
+- **Clasificación de categorías:** sistema de reglas con normalización de tildes y case-insensitive matching sobre `etiquetas[]` y `tipoEvento`
+- **Cache in-memory:** TTL de 10 min aprovechando instancias warm de Vercel
+
+**Resiliencia de datos:** Si Linda no responde, se sirven 10 registros mock que replican exactamente el schema real. `normalizeRecord()` los procesa de forma idéntica a los datos en vivo.
+
+---
+
+## 💰 Estrategia FinOps — Optimización de Tokens LLM
+
+### 1. Data Trimming — `trimForLLM()`
+
+Las APIs externas devuelven JSONs verbosos. Se diseñó una **separación de capas** entre el payload del frontend y el payload del modelo.
+
+```javascript
+// Aplicada en el loop agentic, antes de pushear el functionResponse al modelo.
+// El toolResult COMPLETO sigue yendo al toolCallLog para el frontend.
+const trimForLLM = (obj) => {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+  return Object.fromEntries(
+    Object.entries(obj)
+      .filter(([k]) => !k.startsWith('_') && k !== 'action')  // elimina _raw, _fullEvents, action
+      .map(([k, v]) => [k, typeof v === 'object' && v !== null && !Array.isArray(v)
+        ? trimForLLM(v)   // recursivo
+        : v
+      ])
+  );
+};
+```
+
+**Convención de campos internos:** Los campos prefijados con `_` son datos para el frontend que no deben llegar al LLM (ej: `_fullEvents` con IDs y URLs, `_raw` con datos crudos del clima). El campo `action` es una señal para el cliente React, semánticamente irrelevante para el modelo.
+
+**Reducción de tokens medida:**
+
+| Herramienta | Tokens antes | Tokens después | Ahorro |
+|---|---|---|---|
+| `search_events` (8 eventos) | ~1.200 | ~480 | **~60%** |
+| `check_weather` | ~350 | ~80 | **~77%** |
+| `plan_itinerary` (combinada) | ~1.550 | ~560 | **~64%** |
+
+**`checkWeather` — traducción semántica del WMO weathercode:**
+
+```javascript
+// El LLM recibe esto (6 campos, sin coordenadas ni arrays horarios)
+{
+  fecha: "2026-08-25",
+  temp_max_c: 16,
+  temp_min_c: 10,
+  prob_lluvia_pct: 70,
+  condicion: "Lluvia 🌧️",           // traduccion del WMO code 61 — no delega razonamiento al LLM
+  consejo_ropa: "Llevar paraguas."  // pre-calculado en servidor — no consume tokens de inferencia
+}
+```
+
+### 2. Ventana Deslizante del Historial
+
+El historial enviado al modelo está acotado a los últimos `N` turnos. Mantiene el costo de contexto proporcional a la longitud real de la conversación activa.
+
+---
+
+## 🧪 Testing & QA
+
+Suite completa en **Vitest** con cobertura de protocolo SSE, optimización FinOps y lógica de negocio ETL.
+
+```bash
+npm test            # 67 tests
+npm run test:watch  # Modo watch (TDD)
+```
+
+**Resultado actual:**
+
+```
+ Test Files  3 passed (3)
+      Tests  67 passed (67)
+   Duration  3.31s
+```
+
+| Suite | Tests | Qué valida |
+|---|---|---|
+| **Parseador SSE Cliente** | 6 | Chunks, reconstrucción de texto, evento `done`, líneas malformadas, **chunks TCP fragmentados** |
+| **Helpers SSE Servidor** | 4 | Formato `data: {...}\n\n`, headers, idempotencia de `initSSE`, flujo E2E |
+| **FinOps — trimForLLM** | 7 | Eliminación de `_*` y `action`, recursividad, arrays intactos, null-safety |
+| **FinOps — searchEvents slim** | 5 | Campos presentes/ausentes, truncado ≤150 chars, `sizeof(slim) < sizeof(full)` |
+| **FinOps — checkWeather** | 10 | 6 rangos WMO, 3 consejos de ropa, ausencia de campos basura, ≥60% reducción |
+| **ETL — classifyCategory** | 10 | Reglas Musical/Deportivo/Gastronomía, tildes, case-insensitive, null-safety |
+| **ETL — normalizeLocation** | 10 | Mapeo barrios snake_case, fallbacks, case-insensitive |
+| **Hook — isEventUpcoming** | 15 | Formatos `YYYY-MM-DD`, `DD-MM-YYYY`, `DD/MM/YYYY`, hora pasada/futura, null/undefined |
+
+> **Caso destacado:** El test de **chunks TCP fragmentados** simula que un chunk de red llega cortado a la mitad de una línea SSE (`data: {"tex` / `t":"hola"}\n\n`). El buffer acumulativo del cliente lo reensambla correctamente antes del `JSON.parse`.
 
 ---
 
@@ -176,135 +252,107 @@ EvenGo es intencionalmente **stateless**: no persiste eventos en una base de dat
 
 ```
 EvenGo/
-├── api/                        # Vercel Serverless Functions (Node.js)
-│   ├── _cache.js               # Módulo de caché en memoria (TTL configurable)
-│   ├── chat.js                 # Orquestador del Agente IA (Plan A: Gemini, Plan B: Grok, Plan C: static)
-│   ├── events.js               # ETL: extracción, normalización y caché de eventos del GCBA
-│   ├── sync-gcba.js            # Script de sincronización manual con la API de Linda
-│   └── sync-gcba.test.js       # Tests unitarios del pipeline ETL
+├── api/                          # Vercel Serverless Functions (Node.js)
+│   ├── chat.js                   # Agente IA — SSE, HA Plan A/B/C, trimForLLM
+│   ├── events.js                 # GET /api/events — Linda API + cache 10min
+│   ├── sync-gcba.js              # ETL pipeline: Datos Abiertos GCBA → schema EvenGo
+│   ├── _cache.js                 # Cache in-memory (warm Vercel instance)
+│   ├── chat.test.js              # Tests SSE + FinOps (32 tests)
+│   └── sync-gcba.test.js         # Tests ETL GCBA (20 tests)
 │
 ├── src/
 │   ├── components/
-│   │   ├── ChatBot.jsx         # Widget conversacional flotante (Agente IA)
-│   │   ├── Dashboard.jsx       # Vista /radar-cultural con gráficos Recharts
-│   │   ├── DataSourceBanner.jsx# Banner de estado de fuente de datos (live/mock)
-│   │   ├── EventCard.jsx       # Tarjeta individual de evento con anchorLink
-│   │   ├── EventGrid.jsx       # Grid responsivo de EventCards
-│   │   ├── FavoritesDrawer.jsx # Drawer lateral "Mi Ruta" (favoritos)
-│   │   ├── FilterPanel.jsx     # Sidebar de filtros combinables
-│   │   ├── Hero.jsx            # Sección hero con contador de eventos
-│   │   ├── Navbar.jsx          # Barra de navegación con contador de favoritos
-│   │   └── ScrollToTop.jsx     # Botón flotante de regreso al inicio
-│   │
-│   ├── context/
-│   │   ├── EventContext.js     # Definición del Contexto global de eventos
-│   │   └── EventProvider.jsx   # Proveedor del contexto (wrappea useEvents)
-│   │
+│   │   ├── ChatBot.jsx           # Agente conversacional — SSE token a token
+│   │   ├── EventGrid.jsx         # Grid de tarjetas con filtros en tiempo real
+│   │   ├── EventCard.jsx         # Tarjeta individual con anchor para el agente IA
+│   │   ├── FilterPanel.jsx       # Filtros: categoría, barrio, precio, búsqueda
+│   │   └── FavoritesDrawer.jsx   # Panel de favoritos (localStorage)
 │   ├── hooks/
-│   │   ├── useEventAnalytics.js# Métricas derivadas para los gráficos del Dashboard
-│   │   ├── useEventContext.js  # Accessor del EventContext (con validación)
-│   │   ├── useEvents.js        # Hook principal: carga, filtrado y estado de eventos
-│   │   ├── useEvents.test.js   # Tests unitarios del hook useEvents
-│   │   └── useFavorites.js     # Gestión de favoritos con localStorage
-│   │
-│   ├── services/
-│   │   └── evengoService.js    # Cliente HTTP hacia /api/events
-│   │
-│   ├── data/                   # Eventos mock de demostración (fallback)
-│   ├── utils/                  # Utilidades de fechas y calendario
-│   ├── assets/                 # Recursos estáticos (íconos, imágenes)
-│   ├── App.jsx                 # Componente raíz: Router + rutas + layout global
-│   └── main.jsx                # Entry point de React + registro del Service Worker
+│   │   ├── useEvents.js          # Fetch, filtrado, ordenamiento de eventos
+│   │   ├── useFavorites.js       # CRUD favoritos + sincronización via CustomEvent
+│   │   └── useEvents.test.js     # Tests hook isEventUpcoming (15 tests)
+│   └── context/
+│       └── EventProvider.jsx     # Context global de eventos
 │
-├── public/                     # Assets públicos (manifest, íconos PWA)
-├── .env.example                # Plantilla de variables de entorno
-├── vercel.json                 # Rewrites de Vercel para SPA routing
-├── vite.config.js              # Configuración de Vite (React + PWA + Tailwind)
+├── vite.config.js                # Vite + Vitest (node/jsdom) + Tailwind + PWA
+├── vercel.json                   # SPA rewrite rules
 └── package.json
 ```
 
 ---
 
-## ⚙️ Instalación y Uso Local
+## ⚙️ Instalación y Configuración Local
+
+### Prerrequisitos
+
+- Node.js ≥ 18
+- [Vercel CLI](https://vercel.com/docs/cli) — necesario para las Serverless Functions locales
 
 ```bash
-# 1. Clonar el repositorio
-git clone https://github.com/KLGomez/EvenGo.git
+npm install -g vercel
+```
 
-# 2. Instalar dependencias
+### Setup
+
+```bash
+git clone https://github.com/KLGomez/EvenGo.git
 cd EvenGo
 npm install
+cp .env.example .env.local   # completar con tus claves
 
-# 3. Configurar variables de entorno
-cp .env.example .env.local
-# Editá .env.local y completá GEMINI_API_KEY con tu clave de Google AI Studio
-
-# 4. Iniciar el servidor de desarrollo
-npx vercel dev
-# ⚠️  NO usar `npm run dev` solo — las funciones /api/* requieren Vercel CLI
-#     para ser emuladas correctamente en entorno local.
-
-# 5. Correr los tests
-npm test
-
-# 6. Compilar para producción
-npm run build
-
-# 7. Vista previa del build de producción
-npm run preview
+# IMPORTANTE: usar vercel dev, no npm run dev
+# npm run dev: solo frontend (sin /api)
+# vercel dev: frontend + Serverless Functions con hot-reload
+vercel dev
 ```
 
----
+### Variables de Entorno
 
-## 🔑 Variables de Entorno
+| Variable | Requerida | Descripción |
+|---|---|---|
+| `GEMINI_API_KEY` | ✅ Obligatoria | Google AI Studio — [obtener aquí](https://aistudio.google.com/app/apikey) |
+| `GROQ_API_KEY` | ⚠️ Recomendada | Groq Console — Plan B del agente — [obtener aquí](https://console.groq.com/) |
+| `GEMINI_MODEL` | ❌ Opcional | Nombre del modelo. Default: `gemini-flash-latest` |
 
-| Variable | Tipo | Requerida | Descripción |
-| :--- | :--- | :---: | :--- |
-| `GEMINI_API_KEY` | Server-side | ✅ | Clave de la API de Gemini. Obtenerla en [Google AI Studio](https://aistudio.google.com/app/apikey). |
-| `XAI_API_KEY` | Server-side | ❌ | Clave de la API de x.ai (Grok). Habilita el Plan B de fallback del agente. |
-| `FALLBACK_API_KEY` | Server-side | ❌ | Alias alternativo para `XAI_API_KEY` (se usa si esta no está definida). |
+> **Graceful Degradation:** Sin `GROQ_API_KEY`, si Gemini falla el Plan B se omite y el Plan C activa una respuesta de contingencia vía SSE. El usuario siempre recibe una respuesta coherente.
 
-> **Importante:** Las variables **sin** prefijo `VITE_` son exclusivamente server-side (Vercel Serverless) y nunca se exponen en el bundle del cliente. Nunca uses el prefijo `VITE_` para claves privadas.
-
----
-
-## 🔌 Endpoints de la API
-
-| Método | Ruta | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/api/events` | Retorna la agenda de eventos normalizados del GCBA (con caché de 10 min y fallback a mocks). |
-| `POST` | `/api/chat` | Orquesta el agente IA (Gemini → Grok → fallback estático). Body: `{ messages: [...] }`. |
+> **Seguridad:** Variables sin prefijo `VITE_` son exclusivamente server-side. Vite no las inyecta en el bundle del cliente.
 
 ---
 
-## 🧪 Testing
-
-El proyecto incluye tests unitarios con **Vitest** y **@testing-library/jest-dom**:
+## 🚀 Deployment
 
 ```bash
-npm test          # Ejecuta los tests una vez
-npm run test:watch  # Modo watch (re-ejecuta al guardar)
+vercel --prod   # deploy a producción
+vercel          # preview / staging
 ```
 
-**Cobertura actual:**
-- `api/sync-gcba.test.js` — lógica de normalización y clasificación del pipeline ETL.
-- `src/hooks/useEvents.test.js` — lógica de filtrado, detección de eventos vigentes y manejo de errores del hook principal.
+El `vercel.json` configura el rewrite SPA para que React Router coexista con las rutas `/api/*` sin colisiones. Las Serverless Functions heredan el cache in-memory de `api/events.js` en instancias warm, complementado por `Cache-Control: s-maxage=300, stale-while-revalidate=600` en el CDN de Vercel.
 
 ---
 
-## 🚀 Despliegue
+## 🛠️ Scripts
 
-El proyecto está optimizado para desplegarse en **Vercel** con zero-config:
-
-1. Conectar el repositorio en [vercel.com](https://vercel.com).
-2. Agregar las variables de entorno (`GEMINI_API_KEY`, `XAI_API_KEY`) en el panel de Vercel.
-3. Vercel detecta automáticamente la carpeta `api/` como Serverless Functions y `vite build` como el comando de build del frontend.
-
-El archivo `vercel.json` configura los rewrites necesarios para el SPA routing (`react-router-dom`).
+```bash
+npm run dev         # Solo Vite (frontend, sin /api)
+vercel dev          # Vite + Serverless Functions (recomendado)
+npm run build       # Build de produccion con Vite
+npm run preview     # Preview local del build
+npm test            # Suite completa Vitest (67 tests)
+npm run test:watch  # Vitest en modo watch
+npm run lint        # Linting con oxlint
+```
 
 ---
 
-## 📄 Licencia y Autoría
+## 📄 Licencia
 
-Diseñado y desarrollado por **Katherine Gomez**.  
-*Quilmes, Buenos Aires, Argentina — © 2026*
+MIT — ver [LICENSE](LICENSE) para más detalles.
+
+---
+
+<div align="center">
+
+Hecho con ☕ y demasiados tokens en Buenos Aires.
+
+</div>
