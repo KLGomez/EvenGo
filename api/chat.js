@@ -536,7 +536,11 @@ export default async function handler(req, res) {
     if (!apiKey) throw new Error('Configuración incompleta: Falta GEMINI_API_KEY.');
 
 
-    const modelName = 'gemini-flash-latest';
+    // ── FinOps: modelo más económico disponible ───────────────────────────────
+    // gemini-flash-lite-latest → alias que siempre apunta al Flash-Lite más reciente.
+    // Es el modelo de menor costo por token en la familia Gemini.
+    // Configurable vía GEMINI_MODEL sin tocar código (ver .env.example).
+    const modelName = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest';
     console.log(`[api/chat] Inicializando modelo Gemini streaming: "${modelName}"`);
 
     const genAI = new GoogleGenerativeAI(apiKey);
