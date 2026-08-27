@@ -96,11 +96,11 @@ async function searchEvents({ category, barrio, isFree, query } = {}) {
     // Elimina: id, imagen, url externa, source, category. Trunca desc a 150 chars.
     // Ahorro estimado: ~40-60% de tokens por herramienta de eventos.
     const resultsForLLM = results.map((e) => ({
-      titulo:     e.title,
-      fecha:      e.date,
-      barrio:     e.location,        // location ya es el nombre legible (ej: "Palermo")
-      lugar:      e.address,
-      precio:     e.precio || 'Consultar',
+      titulo: e.title,
+      fecha: e.date,
+      barrio: e.location,        // location ya es el nombre legible (ej: "Palermo")
+      lugar: e.address,
+      precio: e.precio || 'Consultar',
       anchorLink: e.anchorLink,
       ...(e.description ? { descripcion: e.description.slice(0, 150) } : {}),
     }));
@@ -153,12 +153,12 @@ async function checkWeather({ date } = {}) {
     // El LLM necesita UNA frase de condición, no un código numérico crudo.
     // Ahorro estimado: ~70% de tokens respecto al JSON completo de Open-Meteo.
     const condicion = (() => {
-      if (weatherCode === 0)              return 'Despejado ☀️';
-      if (weatherCode <= 3)              return 'Parcialmente nublado 🌤️';
-      if (weatherCode <= 48)             return 'Nublado / Niebla ☁️';
-      if (weatherCode <= 67)             return 'Lluvia 🌧️';
-      if (weatherCode <= 77)             return 'Nieve / Granizo ❄️';
-      if (weatherCode <= 82)             return 'Lluvias intermitentes 🌦️';
+      if (weatherCode === 0) return 'Despejado ☀️';
+      if (weatherCode <= 3) return 'Parcialmente nublado 🌤️';
+      if (weatherCode <= 48) return 'Nublado / Niebla ☁️';
+      if (weatherCode <= 67) return 'Lluvia 🌧️';
+      if (weatherCode <= 77) return 'Nieve / Granizo ❄️';
+      if (weatherCode <= 82) return 'Lluvias intermitentes 🌦️';
       return 'Tormenta eléctrica ⛈️';
     })();
 
@@ -166,10 +166,10 @@ async function checkWeather({ date } = {}) {
     const consejo_ropa = willRain
       ? 'Llevar paraguas o piloto impermeable.'
       : tempMax > 26
-      ? 'Ropa fresca y protector solar.'
-      : tempMin < 13
-      ? 'Abrigar con campera liviana o sweater.'
-      : 'Ropa cómoda, clima agradable.';
+        ? 'Ropa fresca y protector solar.'
+        : tempMin < 13
+          ? 'Abrigar con campera liviana o sweater.'
+          : 'Ropa cómoda, clima agradable.';
 
     return {
       fecha: targetDate,
@@ -291,10 +291,10 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
     ?? (willRain
       ? '⚠️ Alta probabilidad de lluvia: Se sugiere llevar paraguas o piloto.'
       : tempMax > 26
-      ? '☀️ Día caluroso: Se recomienda ropa fresca e hidratación.'
-      : tempMin < 13
-      ? '🌙 Noche fresca: Se aconseja llevar un abrigo liviano.'
-      : '🌤️ Clima favorable para paseos al aire libre.');
+        ? '☀️ Día caluroso: Se recomienda ropa fresca e hidratación.'
+        : tempMin < 13
+          ? '🌙 Noche fresca: Se aconseja llevar un abrigo liviano.'
+          : '🌤️ Clima favorable para paseos al aire libre.');
 
   return {
     success: true,
@@ -729,7 +729,7 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${groqApiKey}`,
           },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
             messages: groqMessages,
             stream: true,
           }),
@@ -764,7 +764,7 @@ export default async function handler(req, res) {
               const parsed = JSON.parse(raw);
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) sseWrite(res, { text: content });
-            } catch {}
+            } catch { }
           }
         }
 
@@ -775,7 +775,7 @@ export default async function handler(req, res) {
               const parsed = JSON.parse(raw);
               const content = parsed.choices?.[0]?.delta?.content;
               if (content) sseWrite(res, { text: content });
-            } catch {}
+            } catch { }
           }
         }
 
