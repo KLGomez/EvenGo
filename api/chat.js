@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { createEvent } from 'ics';
+import { getCached, setCached } from './_cache.js';
 
 /**
  * Vercel Serverless Function: POST /api/chat
@@ -19,9 +20,26 @@ const BA_LON = -58.3816;
 
 // ─── IMPLEMENTACIONES DE HERRAMIENTAS ──────────────────────────────────────────
 
+// TTL del caché para búsquedas de eventos en el chat (5 minutos).
+// En instancias calientes de Vercel esto elimina re-fetches entre tool calls
+// consecutivos dentro de la misma conversación.
+const SEARCH_EVENTS_CACHE_TTL = 5 * 60 * 1000;
+
 async function searchEvents({ category, barrio, isFree, query } = {}) {
   try {
-    const url = `${LINDA_API}?limit=50`;
+    // ── FinOps: Caché de eventos para el chat ────────────────────────────────
+    // Usamos una clave basada en los filtros para que distintas combinaciones
+    // tengan su propia entrada en caché. El fetch base (sin filtros) se cachea
+    // con la clave 'chat-events-base' para reutilizarlo en todos los turnos.
+    const cacheKey = `chat-events:${category || ''}:${barrio || ''}:${isFree ?? ''}:${query || ''}`;
+    const cachedResult = getCached(cacheKey, SEARCH_EVENTS_CACHE_TTL);
+    if (cachedResult) {
+      console.log(`[api/chat] searchEvents: cache hit (${cacheKey})`);
+      return cachedResult;
+    }
+
+    // ── FinOps: limit=20 (era 50) — solo usamos 8, margen de 20 es suficiente
+    const url = `${LINDA_API}?limit=20`;
     const response = await fetch(url, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(8000),
@@ -94,15 +112,22 @@ async function searchEvents({ category, barrio, isFree, query } = {}) {
         : {}),
     }));
 
-    return {
+    const result = {
       count: results.length,
       eventos: resultsForLLM,   // ← payload al LLM (slim)
       _fullEvents: results,      // ← payload al frontend (marcado con _ para excluirlo en el trim de abajo)
     };
+
+    // Guardar en caché solo si hay resultados
+    if (results.length > 0) setCached(cacheKey, result);
+
+    return result;
   } catch (err) {
     return { count: 0, events: [], source: 'unavailable', error: err.message };
   }
 }
+
+
 
 async function checkWeather({ date } = {}) {
   const targetDate = date || new Date().toISOString().slice(0, 10);
@@ -291,7 +316,15 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
         willRain,
       },
       primaryEvent,
-      alternativeEvents: events.slice(1, 4),
+      // ── FinOps: Mejora 3 — slim alternativeEvents ────────────────────────
+      // El LLM solo necesita título, fecha y enlace de los alternativos.
+      // Reducción: 3 eventos completos → 2 eventos con 3 campos cada uno.
+      // Ahorro estimado: ~300-500 tokens por invocación de plan_itinerary.
+      alternativeEvents: events.slice(1, 3).map((e) => ({
+        titulo: e.title,
+        fecha: e.date,
+        anchorLink: e.anchorLink,
+      })),
       timeline: [
         { time: '18:00', activity: `Encuentro y café en ${barrio || 'la zona del evento'}` },
         { time: primaryEvent.time || '19:30', activity: `Evento Destacado: ${primaryEvent.title}` },
@@ -301,10 +334,18 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
         clothingTip,
         transportTip: `Dirección principal: ${primaryEvent.address || primaryEvent.lugar || 'Buenos Aires'}`,
       },
-      calendarInvite: calendarInvite.generated ? calendarInvite : null,
+      // ── FinOps: Mejora 2 — calendarInvite excluido del payload al LLM ───
+      // El campo _calendarInvite tiene prefijo "_" → trimForLLM() lo elimina
+      // automáticamente antes de inyectarlo como functionResponse al modelo.
+      // La acción de descarga llega al frontend vía actions.invites (línea ~600).
+      // Ahorro estimado: ~2.000-4.000 tokens por invocación (base64 del .ics).
+      _calendarInvite: calendarInvite.generated ? calendarInvite : null,
+      // Flag mínimo para que el LLM sepa que la invitación fue generada
+      calendarInviteReady: calendarInvite.generated ?? false,
     },
   };
 }
+
 
 const TOOL_IMPLEMENTATIONS = {
   search_events: searchEvents,
@@ -502,8 +543,13 @@ export default async function handler(req, res) {
     //   2. El historial siempre empieza con role: 'user' (requerido por Gemini).
     //   3. Nunca cortamos en medio de un par user/assistant.
 
-    const HISTORY_WINDOW_TURNS = parseInt(process.env.HISTORY_WINDOW_TURNS || '10', 10);
+    // ── FinOps: Mejora 4 — Default reducido de 10 → 6 turnos ────────────────
+    // 6 turnos × 2 msgs = 12 mensajes máximo de historial (~2.400-3.600 tokens).
+    // Antes: 10 turnos = 20 msgs = ~4.000-6.000 tokens de contexto base.
+    // Reducir si el agente sigue sin tokens; incrementar si necesita más memoria.
+    const HISTORY_WINDOW_TURNS = parseInt(process.env.HISTORY_WINDOW_TURNS || '6', 10);
     const MAX_HISTORY_MSGS = HISTORY_WINDOW_TURNS * 2; // cada "turno" = 1 user + 1 assistant
+
 
     // rawHistory sin el último mensaje (la pregunta actual va en lastUserMsg)
     const historyWithoutLast = rawHistory.slice(0, -1);
@@ -575,8 +621,9 @@ export default async function handler(req, res) {
       }
       if (toolResult?.action === 'SHOW_ITINERARY' && toolResult.itinerary) {
         actions.itineraries.push(toolResult.itinerary);
-        if (toolResult.itinerary.calendarInvite?.downloadUrl) {
-          actions.invites.push(toolResult.itinerary.calendarInvite);
+        // ── FinOps: leer desde _calendarInvite (campo interno, no expuesto al LLM)
+        if (toolResult.itinerary._calendarInvite?.downloadUrl) {
+          actions.invites.push(toolResult.itinerary._calendarInvite);
         }
       }
 
@@ -630,13 +677,27 @@ export default async function handler(req, res) {
       try {
         console.log('[api/chat] Groq: Intentando respuesta vía Fallback streaming (llama-3.3-70b-versatile)...');
 
+        // ── FinOps: Mejora 4 — Sliding Window también en Groq ────────────────
+        // El path de Gemini ya recorta el historial, pero si falla y caemos aquí
+        // el rawHistory original (sin recortar) se enviaba íntegro a Groq.
+        // Reutilizamos la misma ventana para consistencia y control de costo.
+        const groqMaxMsgs = (parseInt(process.env.HISTORY_WINDOW_TURNS || '6', 10)) * 2;
+        const groqHistory = rawHistory.length > groqMaxMsgs
+          ? rawHistory.slice(-groqMaxMsgs)
+          : rawHistory;
+
+        if (rawHistory.length > groqMaxMsgs) {
+          console.log(`[api/chat] Groq Sliding Window: historial recortado ${rawHistory.length} → ${groqHistory.length} mensajes`);
+        }
+
         const groqMessages = [
           { role: 'system', content: SYSTEM_INSTRUCTION },
-          ...rawHistory.map((m) => ({
+          ...groqHistory.map((m) => ({
             role: m.role === 'assistant' ? 'assistant' : 'user',
             content: typeof m.content === 'string' ? m.content : String(m.content || ''),
           })),
         ];
+
 
         const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
