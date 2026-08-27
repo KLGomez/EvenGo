@@ -628,7 +628,7 @@ export default async function handler(req, res) {
     const groqApiKey = process.env.GROQ_API_KEY || process.env.FALLBACK_API_KEY;
     if (groqApiKey) {
       try {
-        console.log('[api/chat] Groq: Intentando respuesta vía Fallback streaming (llama-3.1-8b-instant)...');
+        console.log('[api/chat] Groq: Intentando respuesta vía Fallback streaming (llama-3.3-70b-versatile)...');
 
         const groqMessages = [
           { role: 'system', content: SYSTEM_INSTRUCTION },
@@ -645,7 +645,7 @@ export default async function handler(req, res) {
             'Authorization': `Bearer ${groqApiKey}`,
           },
           body: JSON.stringify({
-            model: 'llama-3.1-8b-instant',
+            model: 'llama-3.3-70b-versatile',
             messages: groqMessages,
             stream: true,
           }),
