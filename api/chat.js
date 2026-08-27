@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { createEvent } from 'ics';
 import { getCached, setCached } from './_cache.js';
+import { normalizeRecord } from './_normalize.js';
+
 
 /**
  * Vercel Serverless Function: POST /api/chat
@@ -85,37 +87,28 @@ async function searchEvents({ category, barrio, isFree, query } = {}) {
       );
     }
 
-    // Objeto COMPLETO → se guarda en toolCallLog y se entrega al frontend
-    const results = events.slice(0, 8).map((e) => ({
-      id: e.id || `linda-${Date.now()}`,
-      title: e.title,
-      date: e.fechaInicio ? e.fechaInicio.slice(0, 10) : null,
-      barrio: e.barrio || null,
-      address: e.direccion || e.ubicacion?.direccion || null,
-      price: e.acceso === 'sin_costo' ? 'Gratuito' : e.precio || 'Consultar',
-      url: e.pathAlias ? `https://linda.buenosaires.gob.ar${e.pathAlias}` : null,
-      anchorLink: `#event-${e.id}`,
-    }));
+    // Normalizar con el mismo schema que usa /api/events (módulo compartido)
+    // Los filtros corren sobre el JSON crudo de Linda (más eficiente).
+    // normalizeRecord() se aplica solo al slice final de 8 eventos.
+    const results = events.slice(0, 8).map(normalizeRecord);
 
     // ── FinOps: Objeto SLIM → lo único que necesita el LLM para razonar ────────
-    // Elimina: id interno, url externa, source. Trunca descripción a 150 chars.
+    // Elimina: id, imagen, url externa, source, category. Trunca desc a 150 chars.
     // Ahorro estimado: ~40-60% de tokens por herramienta de eventos.
     const resultsForLLM = results.map((e) => ({
-      titulo: e.title,
-      fecha: e.date,
-      barrio: e.barrio,
-      lugar: e.address,
-      precio: e.price,
+      titulo:     e.title,
+      fecha:      e.date,
+      barrio:     e.location,        // location ya es el nombre legible (ej: "Palermo")
+      lugar:      e.address,
+      precio:     e.precio || 'Consultar',
       anchorLink: e.anchorLink,
-      ...(e.description
-        ? { descripcion: String(e.description).slice(0, 150) }
-        : {}),
+      ...(e.description ? { descripcion: e.description.slice(0, 150) } : {}),
     }));
 
     const result = {
       count: results.length,
-      eventos: resultsForLLM,   // ← payload al LLM (slim)
-      _fullEvents: results,      // ← payload al frontend (marcado con _ para excluirlo en el trim de abajo)
+      eventos: resultsForLLM,  // ← payload al LLM (slim)
+      _fullEvents: results,     // ← payload al frontend (campo _ → excluido por trimForLLM)
     };
 
     // Guardar en caché solo si hay resultados
@@ -513,9 +506,35 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El campo "messages" es requerido.' });
     }
 
+    // ── FinOps: Short-circuit de saludos (0 tokens) ───────────────────────────
+    // Si el último mensaje del usuario es un saludo simple y es el PRIMER turno
+    // (historial de 1 sola entrada), respondemos con texto estático sin invocar
+    // al modelo. Esto elimina el costo completo de la llamada a Gemini para el
+    // caso de uso más frecuente: el usuario abre el chat y escribe "hola".
+    //
+    // Condición de activación:
+    //   1. Solo hay 1 mensaje en el historial (primer turno de la conversación).
+    //   2. El mensaje coincide con el regex de saludos.
+    //
+    // Si ya hay historial previo, el saludo puede ser parte de un contexto
+    // conversacional ("ok gracias, chau") → dejamos que el modelo responda.
+    const GREETING_REGEX = /^\s*(hola|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|buen\s+d[ií]a|hey|hi|hello|saludos|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?|qu[eé]\s+onda|buen\s+d[ií]a)\s*[!¡.]*\s*$/i;
+    const lastMsg = String(rawHistory[rawHistory.length - 1].content || '').trim();
+    const isGreeting = rawHistory.length === 1 && GREETING_REGEX.test(lastMsg);
+
+    if (isGreeting) {
+      console.log('[api/chat] Short-circuit: saludo detectado. Respuesta estática (0 tokens).');
+      initSSE(res);
+      sseWrite(res, { text: '¡Hola! 👋 Soy tu Concierge de EvenGo. Puedo ayudarte a **buscar eventos en Buenos Aires**, consultar el **clima**, armar un **itinerario** o guardar tus favoritos.\n\n¿Qué plan tenés en mente?' });
+      sseWrite(res, { done: true, toolCalls: [], actions: { favorites: [], invites: [], itineraries: [] } });
+      res.end();
+      return;
+    }
+
     // ── PLAN A: Proveedor Primario (Gemini) con generateContentStream ─────────
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('Configuración incompleta: Falta GEMINI_API_KEY.');
+
 
     const modelName = 'gemini-flash-latest';
     console.log(`[api/chat] Inicializando modelo Gemini streaming: "${modelName}"`);
