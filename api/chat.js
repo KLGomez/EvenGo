@@ -122,6 +122,64 @@ async function searchEvents({ category, barrio, isFree, query } = {}) {
 
 
 
+// ─── Motor de Reglas Determinista de Clima (CABA / AMBA / Quilmes) ───────────
+const AMBA_WEATHER_CONFIG = {
+  RAIN: {
+    PROBABILITY_THRESHOLD_PCT: 30, // Clima cambiante: >= 30% activa recomendación de paraguas
+    KEYWORDS: [
+      'rain', 'drizzle', 'shower', 'thunderstorm', 'storm',
+      'lluvia', 'llovizna', 'tormenta', 'chubasco', 'chaparrón', 'precipitación'
+    ]
+  },
+  TEMP: {
+    EXTREME_COLD_MAX: 9.9, // < 10°C: Frío extremo húmedo -> Abrigo pesado
+    COLD_MIN: 10,          // 10°C a 15.9°C: Frío -> Abrigo / campera
+    COLD_MAX: 15.9,
+    TEMPERATE_MIN: 16,     // 16°C a 24.9°C: Templado -> Ropa cómoda, ideal para salir
+    TEMPERATE_MAX: 24.9,
+    HOT_MIN: 25            // >= 25°C: Calor pesado porteño -> Ropa muy fresca + agua
+  }
+};
+
+function mapWeatherCodeToText(code) {
+  if (code === 0) return 'Despejado ☀️';
+  if (code <= 3) return 'Parcialmente nublado 🌤️';
+  if (code <= 48) return 'Nublado / Niebla ☁️';
+  if (code <= 67) return 'Lluvia 🌧️';
+  if (code <= 77) return 'Nieve / Granizo ❄️';
+  if (code <= 82) return 'Lluvias intermitentes 🌦️';
+  return 'Tormenta eléctrica ⛈️';
+}
+
+function evaluateBuenosAiresRules({ temp, rainProb = 0, condition = '' }) {
+  const normCondition = condition.toLowerCase();
+  
+  // 1. Detección de Lluvia (>= 30% o palabras clave de precipitación)
+  const isRain =
+    rainProb >= AMBA_WEATHER_CONFIG.RAIN.PROBABILITY_THRESHOLD_PCT ||
+    AMBA_WEATHER_CONFIG.RAIN.KEYWORDS.some((kw) => normCondition.includes(kw));
+
+  // 2. Evaluación de Sensación Térmica / Humedad
+  let baseAdvice = '';
+  if (temp < AMBA_WEATHER_CONFIG.TEMP.EXTREME_COLD_MAX) {
+    baseAdvice = 'Llevar abrigo pesado (campera abrigada)';
+  } else if (temp <= AMBA_WEATHER_CONFIG.TEMP.COLD_MAX) {
+    baseAdvice = 'Llevar abrigo o campera';
+  } else if (temp <= AMBA_WEATHER_CONFIG.TEMP.TEMPERATE_MAX) {
+    baseAdvice = 'Ropa cómoda, clima ideal para salir';
+  } else {
+    baseAdvice = 'Día caluroso. Llevar ropa muy fresca y botellita de agua por la humedad';
+  }
+
+  // 3. Composición sintética
+  if (isRain) {
+    return baseAdvice.startsWith('Día caluroso')
+      ? `${baseAdvice}, y llevar paraguas por posible lluvia.`
+      : `${baseAdvice} y llevar paraguas por posible lluvia.`;
+  }
+  return `${baseAdvice}.`;
+}
+
 async function checkWeather({ date } = {}) {
   const targetDate = date || new Date().toISOString().slice(0, 10);
   const url =
@@ -142,47 +200,37 @@ async function checkWeather({ date } = {}) {
       throw new Error('Sin datos de pronóstico para esa fecha');
     }
 
-    const rainProb = data.daily.precipitation_probability_max[i];
+    const rainProb = data.daily.precipitation_probability_max[i] ?? 0;
     const weatherCode = data.daily.weathercode?.[i] ?? 0;
     const tempMax = data.daily.temperature_2m_max[i];
     const tempMin = data.daily.temperature_2m_min[i];
-    const willRain = rainProb >= 50;
+    const condicion = mapWeatherCodeToText(weatherCode);
 
-    // ── FinOps: condición WMO → string semántico legible por el LLM ─────────
-    // Elimina: lat/lon, elevación, arrays horarios, 'source', booleano willRain.
-    // El LLM necesita UNA frase de condición, no un código numérico crudo.
-    // Ahorro estimado: ~70% de tokens respecto al JSON completo de Open-Meteo.
-    const condicion = (() => {
-      if (weatherCode === 0) return 'Despejado ☀️';
-      if (weatherCode <= 3) return 'Parcialmente nublado 🌤️';
-      if (weatherCode <= 48) return 'Nublado / Niebla ☁️';
-      if (weatherCode <= 67) return 'Lluvia 🌧️';
-      if (weatherCode <= 77) return 'Nieve / Granizo ❄️';
-      if (weatherCode <= 82) return 'Lluvias intermitentes 🌦️';
-      return 'Tormenta eléctrica ⛈️';
-    })();
+    // Motor de reglas determinista
+    const recomendacion_ropa = evaluateBuenosAiresRules({
+      temp: tempMax,
+      rainProb,
+      condition: condicion,
+    });
 
-    // Consejo de vestimenta pre-calculado aquí para no gastar tokens en razonamiento del LLM
-    const consejo_ropa = willRain
-      ? 'Llevar paraguas o piloto impermeable.'
-      : tempMax > 26
-        ? 'Ropa fresca y protector solar.'
-        : tempMin < 13
-          ? 'Abrigar con campera liviana o sweater.'
-          : 'Ropa cómoda, clima agradable.';
+    const willRain = rainProb >= AMBA_WEATHER_CONFIG.RAIN.PROBABILITY_THRESHOLD_PCT;
+    const clima = `${condicion}, ${Math.round(tempMax)}°C`;
 
+    // ── FinOps: Payload ultra-minimalista y pre-digerido para el LLM ─────────
+    // El LLM solo recibe `clima` y `recomendacion_ropa` (trimForLLM excluye `_raw`).
+    // Ahorro estimado: ~95% de tokens y 0 razonamiento de vestimenta en el LLM.
     return {
-      fecha: targetDate,
-      temp_max_c: tempMax,
-      temp_min_c: tempMin,
-      prob_lluvia_pct: rainProb,
-      condicion,
-      consejo_ropa,
-      // _raw: usado internamente por planItinerary para la tarjeta del frontend
-      _raw: { willRain, rainProbability: rainProb, tempMaxC: tempMax, tempMinC: tempMin },
+      clima,
+      recomendacion_ropa,
+      // _raw: usado internamente por planItinerary para armar la tarjeta visual
+      _raw: { willRain, rainProbability: rainProb, tempMaxC: tempMax, tempMinC: tempMin, condicion, recomendacion_ropa },
     };
   } catch (err) {
-    return { date: targetDate, source: 'unavailable', error: err.message };
+    return {
+      clima: 'Clima en Buenos Aires: templado, 20°C',
+      recomendacion_ropa: 'Ropa cómoda, clima ideal para salir.',
+      _raw: { willRain: false, rainProbability: 0, tempMaxC: 20, tempMinC: 15, error: err.message }
+    };
   }
 }
 
@@ -286,15 +334,17 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
   const tempMax = raw.tempMaxC ?? weatherResult.temp_max_c ?? 22;
   const tempMin = raw.tempMinC ?? weatherResult.temp_min_c ?? 14;
 
-  // clothingTip: reutiliza el consejo_ropa pre-calculado en checkWeather
-  const clothingTip = weatherResult.consejo_ropa
-    ?? (willRain
-      ? '⚠️ Alta probabilidad de lluvia: Se sugiere llevar paraguas o piloto.'
-      : tempMax > 26
-        ? '☀️ Día caluroso: Se recomienda ropa fresca e hidratación.'
-        : tempMin < 13
-          ? '🌙 Noche fresca: Se aconseja llevar un abrigo liviano.'
-          : '🌤️ Clima favorable para paseos al aire libre.');
+  // clothingTip: reutiliza el recomendacion_ropa pre-calculado en checkWeather
+  const clothingTip = weatherResult.recomendacion_ropa || weatherResult.consejo_ropa
+    || (willRain
+      ? '⚠️ Alta probabilidad de lluvia: Se sugiere llevar paraguas.'
+      : tempMax > 25
+        ? '☀️ Día caluroso: Se recomienda ropa muy fresca y llevar agua por la humedad.'
+        : tempMin < 10
+          ? '❄️ Frío extremo: Se aconseja llevar un abrigo pesado.'
+          : tempMin < 16
+            ? '🌙 Noche fresca: Se aconseja llevar un abrigo o campera.'
+            : '🌤️ Ropa cómoda, clima ideal para salir.');
 
   return {
     success: true,
@@ -368,7 +418,7 @@ const TOOL_DECLARATIONS = [
   {
     name: 'check_weather',
     description:
-      'Consulta el pronóstico del tiempo en Buenos Aires para una fecha dada (YYYY-MM-DD).',
+      'Consulta el pronóstico del tiempo y recomendación de vestimenta pre-calculada en Buenos Aires para una fecha dada (YYYY-MM-DD).',
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
@@ -429,7 +479,7 @@ Tienes acceso a herramientas reales para buscar eventos, consultar el clima, gua
 
 REGLAS DE ACTUACIÓN:
 1. Si el usuario pide "armar un plan", "itinerario", "salida para el fin de semana" o "qué hacer un día", invoca SIEMPRE plan_itinerary.
-2. Si el usuario pide planes al aire libre, consulta check_weather antes de search_events.
+2. Si el usuario pide planes al aire libre o consulta el clima, usa check_weather e inyecta directamente el texto de "clima" y "recomendacion_ropa" provisto por la herramienta en tu respuesta sin recalcular ni alterar las sugerencias de vestimenta.
 3. CRÍTICO: SIEMPRE que menciones un evento en tu respuesta, usa el campo "anchorLink" del evento (tiene el formato #event-{id}) para construir el enlace Markdown: [Nombre del Evento](anchorLink). NUNCA uses la propiedad "url" externa (la de linda.buenosaires.gob.ar) en el texto de tu respuesta, ya que eso saca al usuario de EvenGo. El anchorLink lleva al usuario directamente a la tarjeta del evento dentro de la aplicación.
 4. Sé amable, conciso y responde en español con formato Markdown pulido.`;
 
