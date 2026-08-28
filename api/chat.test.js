@@ -264,19 +264,14 @@ describe('FinOps — trimForLLM()', () => {
 
   it('elimina _raw de checkWeather antes de mandarlo al LLM', () => {
     const weatherFull = {
-      fecha: '2026-08-25',
-      temp_max_c: 22,
-      temp_min_c: 14,
-      prob_lluvia_pct: 10,
-      condicion: 'Despejado ☀️',
-      consejo_ropa: 'Ropa cómoda, clima agradable.',
+      clima: 'Despejado ☀️, 22°C',
+      recomendacion_ropa: 'Ropa cómoda, ideal para salir.',
       _raw: { willRain: false, rainProbability: 10, tempMaxC: 22, tempMinC: 14 },
     };
     const result = trimForLLM(weatherFull);
     expect(result).not.toHaveProperty('_raw');
-    expect(result).toHaveProperty('condicion', 'Despejado ☀️');
-    expect(result).toHaveProperty('consejo_ropa');
-    expect(result).toHaveProperty('prob_lluvia_pct', 10);
+    expect(result).toHaveProperty('clima', 'Despejado ☀️, 22°C');
+    expect(result).toHaveProperty('recomendacion_ropa', 'Ropa cómoda, ideal para salir.');
   });
 
   it('elimina _fullEvents y _raw de forma recursiva en objetos anidados', () => {
@@ -386,10 +381,45 @@ describe('FinOps — esquema slim de searchEvents (resultsForLLM)', () => {
   });
 });
 
-describe('FinOps — esquema trimmeado de checkWeather', () => {
-  // Reproduce la lógica de checkWeather sobre datos mock de Open-Meteo
+describe('FinOps — esquema trimmeado de checkWeather (Reglas CABA/AMBA)', () => {
+  const AMBA_WEATHER_CONFIG = {
+    RAIN: {
+      PROBABILITY_THRESHOLD_PCT: 30,
+      KEYWORDS: ['rain', 'drizzle', 'shower', 'thunderstorm', 'storm', 'lluvia', 'llovizna', 'tormenta', 'chaparrón']
+    },
+    TEMP: {
+      EXTREME_COLD_MAX: 9.9,
+      COLD_MAX: 15.9,
+      TEMPERATE_MAX: 24.9,
+      HOT_MIN: 25
+    }
+  };
+
+  const evaluateBuenosAiresRules = ({ temp, rainProb = 0, condition = '' }) => {
+    const norm = condition.toLowerCase();
+    const isRain = rainProb >= AMBA_WEATHER_CONFIG.RAIN.PROBABILITY_THRESHOLD_PCT ||
+      AMBA_WEATHER_CONFIG.RAIN.KEYWORDS.some((kw) => norm.includes(kw));
+
+    let baseAdvice = '';
+    if (temp < AMBA_WEATHER_CONFIG.TEMP.EXTREME_COLD_MAX) {
+      baseAdvice = 'Llevar abrigo pesado (campera abrigada)';
+    } else if (temp <= AMBA_WEATHER_CONFIG.TEMP.COLD_MAX) {
+      baseAdvice = 'Llevar abrigo o campera';
+    } else if (temp <= AMBA_WEATHER_CONFIG.TEMP.TEMPERATE_MAX) {
+      baseAdvice = 'Ropa cómoda, ideal para salir';
+    } else {
+      baseAdvice = 'Día caluroso. Llevar ropa muy fresca y botellita de agua por la humedad';
+    }
+
+    if (isRain) {
+      return baseAdvice.startsWith('Día caluroso')
+        ? `${baseAdvice}, y llevar paraguas por posible lluvia.`
+        : `${baseAdvice} y llevar paraguas por posible lluvia.`;
+    }
+    return `${baseAdvice}.`;
+  };
+
   const buildWeatherResult = (weatherCode, rainProb, tempMax, tempMin) => {
-    const willRain = rainProb >= 50;
     const condicion = (() => {
       if (weatherCode === 0)   return 'Despejado ☀️';
       if (weatherCode <= 3)   return 'Parcialmente nublado 🌤️';
@@ -399,50 +429,56 @@ describe('FinOps — esquema trimmeado de checkWeather', () => {
       if (weatherCode <= 82)  return 'Lluvias intermitentes 🌦️';
       return 'Tormenta eléctrica ⛈️';
     })();
-    const consejo_ropa = willRain
-      ? 'Llevar paraguas o piloto impermeable.'
-      : tempMax > 26 ? 'Ropa fresca y protector solar.'
-      : tempMin < 13 ? 'Abrigar con campera liviana o sweater.'
-      : 'Ropa cómoda, clima agradable.';
+    const willRain = rainProb >= AMBA_WEATHER_CONFIG.RAIN.PROBABILITY_THRESHOLD_PCT;
+    const recomendacion_ropa = evaluateBuenosAiresRules({ temp: tempMax, rainProb, condition: condicion });
+    const clima = `${condicion}, ${Math.round(tempMax)}°C`;
+
     return {
-      fecha: '2026-08-25',
-      temp_max_c: tempMax,
-      temp_min_c: tempMin,
-      prob_lluvia_pct: rainProb,
-      condicion,
-      consejo_ropa,
-      _raw: { willRain, rainProbability: rainProb, tempMaxC: tempMax, tempMinC: tempMin },
+      clima,
+      recomendacion_ropa,
+      _raw: { willRain, rainProbability: rainProb, tempMaxC: tempMax, tempMinC: tempMin, condicion, recomendacion_ropa },
     };
   };
 
-  it('weatherCode=0 produce condición "Despejado ☀️"', () => {
+  it('weatherCode=0 produce condición "Despejado ☀️, 22°C"', () => {
     const r = buildWeatherResult(0, 5, 22, 14);
-    expect(r.condicion).toBe('Despejado ☀️');
+    expect(r.clima).toBe('Despejado ☀️, 22°C');
   });
 
-  it('weatherCode=61 produce condición "Lluvia 🌧️"', () => {
+  it('weatherCode=61 produce condición "Lluvia 🌧️, 16°C"', () => {
     const r = buildWeatherResult(61, 70, 16, 10);
-    expect(r.condicion).toBe('Lluvia 🌧️');
+    expect(r.clima).toBe('Lluvia 🌧️, 16°C');
   });
 
-  it('weatherCode=95 produce condición "Tormenta eléctrica ⛈️"', () => {
+  it('weatherCode=95 produce condición "Tormenta eléctrica ⛈️, 18°C"', () => {
     const r = buildWeatherResult(95, 90, 18, 13);
-    expect(r.condicion).toBe('Tormenta eléctrica ⛈️');
+    expect(r.clima).toBe('Tormenta eléctrica ⛈️, 18°C');
   });
 
-  it('consejo_ropa → paraguas cuando prob_lluvia >= 50', () => {
-    const r = buildWeatherResult(63, 60, 18, 12);
-    expect(r.consejo_ropa).toBe('Llevar paraguas o piloto impermeable.');
+  it('recomendacion_ropa → paraguas cuando prob_lluvia >= 30% (umbral porteño)', () => {
+    const r = buildWeatherResult(0, 35, 22, 14);
+    expect(r.recomendacion_ropa).toContain('llevar paraguas');
   });
 
-  it('consejo_ropa → ropa fresca cuando tempMax > 26 y no llueve', () => {
-    const r = buildWeatherResult(1, 10, 30, 22);
-    expect(r.consejo_ropa).toBe('Ropa fresca y protector solar.');
+  it('recomendacion_ropa → calor y agua cuando temp > 25°C', () => {
+    const r = buildWeatherResult(0, 10, 28, 20);
+    expect(r.recomendacion_ropa).toContain('Día caluroso');
+    expect(r.recomendacion_ropa).toContain('botellita de agua');
   });
 
-  it('consejo_ropa → abrigo cuando tempMin < 13 y no llueve', () => {
-    const r = buildWeatherResult(2, 20, 18, 8);
-    expect(r.consejo_ropa).toBe('Abrigar con campera liviana o sweater.');
+  it('recomendacion_ropa → ropa cómoda cuando temp entre 16°C y 24°C', () => {
+    const r = buildWeatherResult(0, 10, 21, 15);
+    expect(r.recomendacion_ropa).toBe('Ropa cómoda, ideal para salir.');
+  });
+
+  it('recomendacion_ropa → abrigo o campera cuando temp entre 10°C y 15°C', () => {
+    const r = buildWeatherResult(0, 10, 14, 8);
+    expect(r.recomendacion_ropa).toBe('Llevar abrigo o campera.');
+  });
+
+  it('recomendacion_ropa → abrigo pesado cuando temp < 10°C (frío extremo húmedo)', () => {
+    const r = buildWeatherResult(0, 10, 8, 3);
+    expect(r.recomendacion_ropa).toBe('Llevar abrigo pesado (campera abrigada).');
   });
 
   it('el resultado NO contiene source ni willRain en el nivel raíz', () => {
@@ -459,16 +495,15 @@ describe('FinOps — esquema trimmeado de checkWeather', () => {
     expect(r._raw).toHaveProperty('rainProbability', 5);
   });
 
-  it('después de trimForLLM, _raw desaparece del payload del modelo', () => {
+  it('después de trimForLLM, _raw desaparece y solo quedan clima y recomendacion_ropa', () => {
     const r = buildWeatherResult(0, 5, 22, 14);
     const forLLM = trimForLLM(r);
     expect(forLLM).not.toHaveProperty('_raw');
-    expect(forLLM).toHaveProperty('condicion');
-    expect(forLLM).toHaveProperty('consejo_ropa');
+    expect(forLLM).toHaveProperty('clima');
+    expect(forLLM).toHaveProperty('recomendacion_ropa');
   });
 
   it('el payload LLM es significativamente más pequeño que el JSON crudo de Open-Meteo', () => {
-    // JSON crudo hipotético de Open-Meteo con coordenadas, arrays horarios, etc.
     const rawOpenMeteo = {
       latitude: -34.6037,
       longitude: -58.3816,
@@ -492,7 +527,7 @@ describe('FinOps — esquema trimmeado de checkWeather', () => {
     const rawSize = JSON.stringify(rawOpenMeteo).length;
     const llmSize = JSON.stringify(forLLM).length;
 
-    expect(llmSize).toBeLessThan(rawSize * 0.4); // al menos 60% de reducción
+    expect(llmSize).toBeLessThan(rawSize * 0.3); // más de 70% de reducción
   });
 });
 
