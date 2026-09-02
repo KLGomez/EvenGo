@@ -2,7 +2,8 @@
 // Tests de integración para la lógica SSE del handler api/chat.js y el parseador del cliente.
 // Corre con: npm test
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import handler from './chat.js';
 
 // ─── Utilidad: construye un ReadableStream que emite chunks SSE ───────────────
 
@@ -673,5 +674,93 @@ describe('FinOps — Ventana Deslizante del Historial (Sliding Window)', () => {
     expect(textos).not.toContain('');
     expect(textos).toContain('Mensaje válido');
     expect(textos).toContain('OK');
+  });
+});
+
+// ─── Tests del Short-circuit de Saludos (api/chat.js) ─────────────────────────
+
+describe('Short-circuit de Saludos en api/chat.js', () => {
+  function createMockRes() {
+    return {
+      headers: {},
+      statusCode: 200,
+      headersSent: false,
+      chunks: [],
+      ended: false,
+      setHeader(key, val) {
+        this.headers[key] = val;
+      },
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(data) {
+        this.jsonData = data;
+        this.ended = true;
+        return this;
+      },
+      writeHead(status, headers) {
+        this.statusCode = status;
+        this.headersSent = true;
+        Object.assign(this.headers, headers);
+      },
+      write(chunk) {
+        this.chunks.push(chunk);
+      },
+      end() {
+        this.ended = true;
+      },
+    };
+  }
+
+  it.each([
+    '¡Hola!',
+    '¿Hola?',
+    'hola',
+    '¡Buenas!',
+    '¿Buenas tardes?',
+    'buenos dias',
+    '¡Buen día!',
+    'hey',
+    'hi',
+    'hello',
+    'saludos',
+    '¿Cómo estás?',
+    '¡Qué tal!',
+  ])('intercepta saludo "%s" y responde con stream SSE sin invocar IA', async (greeting) => {
+    const req = {
+      method: 'POST',
+      body: { messages: [{ role: 'user', content: greeting }] },
+    };
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.ended).toBe(true);
+    expect(res.headers['Content-Type']).toBe('text/event-stream');
+    expect(res.chunks.length).toBeGreaterThanOrEqual(2);
+
+    // Primer chunk: texto de saludo
+    const textChunk = JSON.parse(res.chunks[0].replace(/^data: /, '').trim());
+    expect(textChunk.text).toContain('¡Hola! 👋 Soy tu Concierge de EvenGo');
+
+    // Segundo chunk: cierre de stream
+    const doneChunk = JSON.parse(res.chunks[1].replace(/^data: /, '').trim());
+    expect(doneChunk.done).toBe(true);
+  });
+
+  it('funciona también cuando se envía el campo "message" como string único', async () => {
+    const req = {
+      method: 'POST',
+      body: { message: '¡Hola!' },
+    };
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.ended).toBe(true);
+    expect(res.headers['Content-Type']).toBe('text/event-stream');
+    const textChunk = JSON.parse(res.chunks[0].replace(/^data: /, '').trim());
+    expect(textChunk.text).toContain('EvenGo');
   });
 });

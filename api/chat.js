@@ -556,27 +556,36 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'El campo "messages" es requerido.' });
     }
 
-    // ── FinOps: Short-circuit de saludos (0 tokens) ───────────────────────────
-    // Si el último mensaje del usuario es un saludo simple y es el PRIMER turno
-    // (historial de 1 sola entrada), respondemos con texto estático sin invocar
-    // al modelo. Esto elimina el costo completo de la llamada a Gemini para el
-    // caso de uso más frecuente: el usuario abre el chat y escribe "hola".
-    //
-    // Condición de activación:
-    //   1. Solo hay 1 mensaje en el historial (primer turno de la conversación).
-    //   2. El mensaje coincide con el regex de saludos.
-    //
-    // Si ya hay historial previo, el saludo puede ser parte de un contexto
-    // conversacional ("ok gracias, chau") → dejamos que el modelo responda.
-    const GREETING_REGEX = /^\s*(hola|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|buen\s+d[ií]a|hey|hi|hello|saludos|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?|qu[eé]\s+onda|buen\s+d[ií]a)\s*[!¡.]*\s*$/i;
-    const lastMsg = String(rawHistory[rawHistory.length - 1].content || '').trim();
-    const isGreeting = rawHistory.length === 1 && GREETING_REGEX.test(lastMsg);
+    // ── FinOps: Short-circuit de saludos (0 tokens / Latencia mínima) ──────────
+    // 1. Sanitización del input: extrae el último mensaje y elimina signos de apertura
+    const lastMsg = String(rawHistory[rawHistory.length - 1]?.content || '').trim();
+    const sanitizedMsg = lastMsg.replace(/^[¡¿"'`\s]+/, '');
+
+    // 2. Detección rápida: RegEx para capturar saludos comunes al inicio del mensaje
+    const GREETING_REGEX = /^(hola|buenas|buen\s+d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|hi|hello|saludos|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?)/i;
+
+    // Activar únicamente en el primer turno si el mensaje coincide con un saludo
+    const isGreeting = rawHistory.length === 1 && GREETING_REGEX.test(sanitizedMsg);
 
     if (isGreeting) {
-      console.log('[api/chat] Short-circuit: saludo detectado. Respuesta estática (0 tokens).');
+      console.log('[api/chat] Short-circuit: Saludo detectado. Emisión vía SSE (0 tokens).');
+
+      // 3. Inicializar stream SSE
       initSSE(res);
-      sseWrite(res, { text: '¡Hola! 👋 Soy tu Concierge de EvenGo. Puedo ayudarte a **buscar eventos en Buenos Aires**, consultar el **clima**, armar un **itinerario** o guardar tus favoritos.\n\n¿Qué plan tenés en mente?' });
-      sseWrite(res, { done: true, toolCalls: [], actions: { favorites: [], invites: [], itineraries: [] } });
+
+      // 4. Emitir chunk de texto con el formato del protocolo
+      sseWrite(res, {
+        text: '¡Hola! 👋 Soy tu Concierge de EvenGo. Puedo ayudarte a **buscar eventos en Buenos Aires**, consultar el **clima**, armar un **itinerario** o guardar tus favoritos.\n\n¿Qué plan tenés en mente?',
+      });
+
+      // 5. Emitir evento de cierre para que el frontend libere el estado de streaming
+      sseWrite(res, {
+        done: true,
+        toolCalls: [],
+        actions: { favorites: [], invites: [], itineraries: [] },
+      });
+
+      // 6. Finalizar conexión inmediatamente y abortar el resto del handler
       res.end();
       return;
     }
