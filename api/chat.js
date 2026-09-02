@@ -296,7 +296,7 @@ async function planItinerary({ date, barrio, category, isFree, query } = {}) {
   const targetDate = date || new Date().toISOString().slice(0, 10);
 
   const [eventsResult, weatherResult] = await Promise.all([
-    searchEvents({ category, query, limit: 10 }),
+    searchEvents({ category, isFree, query, limit: 10 }),
     checkWeather({ date: targetDate }),
   ]);
 
