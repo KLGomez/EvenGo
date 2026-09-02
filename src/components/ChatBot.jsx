@@ -113,6 +113,66 @@ export default function ChatBot() {
       const decoder = new TextDecoder('utf-8');
       let sseBuffer = '';
 
+      const processPart = (part) => {
+        const line = part.trim();
+        if (!line.startsWith('data:')) return;
+
+        const raw = line.slice(5).trim();
+        let payload;
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          return; // ignorar líneas malformadas
+        }
+
+        if (payload.text) {
+          // 4. Concatenamos el fragmento al último mensaje
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            next[next.length - 1] = { ...last, content: last.content + payload.text };
+            return next;
+          });
+        }
+
+        if (payload.done) {
+          // 5. Evento de cierre: aplicamos toolCalls y actions de una sola vez
+          const { toolCalls = [], actions = { favorites: [], invites: [], itineraries: [] } } = payload;
+
+          // ── Persistencia Automática de Favoritos en localStorage ─────────
+          if (actions.favorites?.length > 0) {
+            try {
+              const rawStored = localStorage.getItem('evengo_favorites');
+              const storedFavorites = rawStored ? JSON.parse(rawStored) : [];
+              let hasChanges = false;
+              actions.favorites.forEach((fav) => {
+                const exists = storedFavorites.some(
+                  (item) => (typeof item === 'object' && item !== null ? item.id : item) === fav.id
+                );
+                if (!exists) {
+                  storedFavorites.unshift(fav);
+                  hasChanges = true;
+                }
+              });
+              if (hasChanges) {
+                localStorage.setItem('evengo_favorites', JSON.stringify(storedFavorites));
+                window.dispatchEvent(new Event('favoritesUpdated'));
+              }
+            } catch (e) {
+              console.error('[ChatBot] Error guardando favoritos en localStorage:', e);
+            }
+          }
+
+          // Enriquecemos el último mensaje con los metadatos del cierre
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            next[next.length - 1] = { ...last, toolCalls, actions };
+            return next;
+          });
+        }
+      };
+
       // 3. Bucle de lectura de chunks
       while (true) {
         const { done, value } = await reader.read();
@@ -120,71 +180,22 @@ export default function ChatBot() {
 
         sseBuffer += decoder.decode(value, { stream: true });
 
-        // Un chunk puede contener varias líneas SSE → dividimos por el separador \n\n
-        const parts = sseBuffer.split('\n\n');
+        // Normalizamos saltos de línea Windows CRLF y dividimos por \n\n
+        const parts = sseBuffer.split(/\r?\n\r?\n/);
 
         // La última parte puede estar incompleta → la retenemos en el buffer
-        sseBuffer = parts.pop();
+        sseBuffer = parts.pop() || '';
 
         for (const part of parts) {
-          // Cada parte tiene el formato:  data: {...}
-          const line = part.trim();
-          if (!line.startsWith('data:')) continue;
+          processPart(part);
+        }
+      }
 
-          const raw = line.slice(5).trim();
-          let payload;
-          try {
-            payload = JSON.parse(raw);
-          } catch {
-            continue; // ignorar líneas malformadas
-          }
-
-          if (payload.text) {
-            // 4. Concatenamos el fragmento al último mensaje (forma funcional de setState)
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              next[next.length - 1] = { ...last, content: last.content + payload.text };
-              return next;
-            });
-          }
-
-          if (payload.done) {
-            // 5. Evento de cierre: aplicamos toolCalls y actions de una sola vez
-            const { toolCalls = [], actions = { favorites: [], invites: [], itineraries: [] } } = payload;
-
-            // ── Persistencia Automática de Favoritos en localStorage ─────────
-            if (actions.favorites?.length > 0) {
-              try {
-                const rawStored = localStorage.getItem('evengo_favorites');
-                const storedFavorites = rawStored ? JSON.parse(rawStored) : [];
-                let hasChanges = false;
-                actions.favorites.forEach((fav) => {
-                  const exists = storedFavorites.some(
-                    (item) => (typeof item === 'object' && item !== null ? item.id : item) === fav.id
-                  );
-                  if (!exists) {
-                    storedFavorites.unshift(fav);
-                    hasChanges = true;
-                  }
-                });
-                if (hasChanges) {
-                  localStorage.setItem('evengo_favorites', JSON.stringify(storedFavorites));
-                  window.dispatchEvent(new Event('favoritesUpdated'));
-                }
-              } catch (e) {
-                console.error('[ChatBot] Error guardando favoritos en localStorage:', e);
-              }
-            }
-
-            // Enriquecemos el último mensaje con los metadatos del cierre
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              next[next.length - 1] = { ...last, toolCalls, actions };
-              return next;
-            });
-          }
+      // Procesar cualquier residuo que haya quedado en el buffer tras cerrar el stream
+      if (sseBuffer.trim()) {
+        const remainingParts = sseBuffer.split(/\r?\n\r?\n/);
+        for (const part of remainingParts) {
+          processPart(part);
         }
       }
     } catch (error) {

@@ -737,7 +737,7 @@ describe('Short-circuit de Saludos en api/chat.js', () => {
     await handler(req, res);
 
     expect(res.ended).toBe(true);
-    expect(res.headers['Content-Type']).toBe('text/event-stream');
+    expect(res.headers['Content-Type']).toContain('text/event-stream');
     expect(res.chunks.length).toBeGreaterThanOrEqual(2);
 
     // Primer chunk: texto de saludo
@@ -759,8 +759,37 @@ describe('Short-circuit de Saludos en api/chat.js', () => {
     await handler(req, res);
 
     expect(res.ended).toBe(true);
-    expect(res.headers['Content-Type']).toBe('text/event-stream');
+    expect(res.headers['Content-Type']).toBe('text/event-stream; charset=utf-8');
     const textChunk = JSON.parse(res.chunks[0].replace(/^data: /, '').trim());
     expect(textChunk.text).toContain('EvenGo');
+  });
+
+  it('intercepta saludo cuando el historial incluye el mensaje de bienvenida inicial del asistente (escenario navegador UI)', async () => {
+    const req = {
+      method: 'POST',
+      body: {
+        messages: [
+          {
+            role: 'assistant',
+            content: '¡Hola! 👋 Soy el Concierge Ejecutivo de EvenGo. Puedo planificar itinerarios...',
+          },
+          {
+            role: 'user',
+            content: '¡Hola!',
+          },
+        ],
+      },
+    };
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    expect(res.ended).toBe(true);
+    expect(res.headers['Content-Type']).toBe('text/event-stream; charset=utf-8');
+    expect(res.chunks.length).toBeGreaterThanOrEqual(2);
+    const textChunk = JSON.parse(res.chunks[0].replace(/^data: /, '').trim());
+    expect(textChunk.text).toContain('EvenGo');
+    const doneChunk = JSON.parse(res.chunks[1].replace(/^data: /, '').trim());
+    expect(doneChunk.done).toBe(true);
   });
 });

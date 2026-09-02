@@ -501,10 +501,14 @@ function sseWrite(res, payload) {
 function initSSE(res) {
   if (!res.headersSent) {
     res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     });
+    if (typeof res.flushHeaders === 'function') {
+      res.flushHeaders();
+    }
   }
 }
 
@@ -557,15 +561,19 @@ export default async function handler(req, res) {
     }
 
     // ── FinOps: Short-circuit de saludos (0 tokens / Latencia mínima) ──────────
-    // 1. Sanitización del input: extrae el último mensaje y elimina signos de apertura
+    // 1. Sanitización del input: extrae el último mensaje del usuario y elimina signos de apertura
     const lastMsg = String(rawHistory[rawHistory.length - 1]?.content || '').trim();
     const sanitizedMsg = lastMsg.replace(/^[¡¿"'`\s]+/, '');
 
     // 2. Detección rápida: RegEx para capturar saludos comunes al inicio del mensaje
     const GREETING_REGEX = /^(hola|buenas|buen\s+d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|hi|hello|saludos|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?)/i;
 
-    // Activar únicamente en el primer turno si el mensaje coincide con un saludo
-    const isGreeting = rawHistory.length === 1 && GREETING_REGEX.test(sanitizedMsg);
+    // Detectamos el primer turno del usuario:
+    // Filtramos solo los mensajes con rol 'user'. Si el usuario solo ha enviado 1 mensaje en la conversación
+    // (independientemente de si el cliente precargó un mensaje de bienvenida del asistente en el estado inicial de la UI),
+    // y dicho mensaje es un saludo, activamos el short-circuit inmediato.
+    const userMessages = rawHistory.filter((m) => m.role === 'user');
+    const isGreeting = userMessages.length === 1 && GREETING_REGEX.test(sanitizedMsg);
 
     if (isGreeting) {
       console.log('[api/chat] Short-circuit: Saludo detectado. Emisión vía SSE (0 tokens).');
