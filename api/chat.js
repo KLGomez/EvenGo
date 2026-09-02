@@ -624,22 +624,18 @@ export default async function handler(req, res) {
     // con información irrelevante para la consulta actual.
     //
     // HISTORY_WINDOW_TURNS: configurable vía variable de entorno.
-    //   Valor por defecto: 10 pares (20 mensajes = ~4.000-6.000 tokens de contexto)
+    //   Valor por defecto: 6 pares (12 mensajes = ~2.400-3.600 tokens de contexto)
     //   Incrementar si el agente necesita recordar más contexto conversacional.
     //   Reducir para menor costo en APIs de pago por token.
     //
     // Invariantes que siempre preservamos:
     //   1. El último mensaje (la pregunta actual del usuario) nunca se descarta.
     //   2. El historial siempre empieza con role: 'user' (requerido por Gemini).
-    //   3. Nunca cortamos en medio de un par user/assistant.
+    //   3. No duplicamos mensajes consecutivos con el mismo rol.
+    //   4. Nunca cortamos en medio de un par user/assistant.
 
-    // ── FinOps: Mejora 4 — Default reducido de 10 → 6 turnos ────────────────
-    // 6 turnos × 2 msgs = 12 mensajes máximo de historial (~2.400-3.600 tokens).
-    // Antes: 10 turnos = 20 msgs = ~4.000-6.000 tokens de contexto base.
-    // Reducir si el agente sigue sin tokens; incrementar si necesita más memoria.
     const HISTORY_WINDOW_TURNS = parseInt(process.env.HISTORY_WINDOW_TURNS || '6', 10);
     const MAX_HISTORY_MSGS = HISTORY_WINDOW_TURNS * 2; // cada "turno" = 1 user + 1 assistant
-
 
     // rawHistory sin el último mensaje (la pregunta actual va en lastUserMsg)
     const historyWithoutLast = rawHistory.slice(0, -1);
@@ -663,11 +659,16 @@ export default async function handler(req, res) {
       }))
       .filter((m) => m.parts[0].text.trim().length > 0);
 
-    // Garantizar invariante: Gemini requiere que el primer mensaje sea role:'user'.
-    // Si el recorte dejó un mensaje de 'model' primero, lo eliminamos.
+    // Invariante 1: Gemini requiere que el primer mensaje sea role:'user'.
     while (normalizedHistory.length > 0 && normalizedHistory[0].role !== 'user') {
       normalizedHistory.shift();
       console.log('[api/chat] Sliding Window: eliminado mensaje inicial de rol "model" para cumplir invariante Gemini.');
+    }
+
+    // Invariante 2: No puede terminar con 'user' antes de inyectar el lastUserMsg
+    while (normalizedHistory.length > 0 && normalizedHistory[normalizedHistory.length - 1].role === 'user') {
+      normalizedHistory.pop();
+      console.log('[api/chat] Sliding Window: eliminado mensaje final repetido de rol "user" para preservar alternancia.');
     }
 
     const lastUserMsg = String(rawHistory[rawHistory.length - 1].content || '');
@@ -677,6 +678,24 @@ export default async function handler(req, res) {
     const actions = { favorites: [], invites: [], itineraries: [] };
     const MAX_TOOL_HOPS = 5;
     let hops = 0;
+    let finalTextResponse = null;
+
+    // ── FinOps: separación de capas ─────────────────────────────────────────
+    // trimForLLM() elimina cualquier campo prefijado con "_" (datos para el
+    // frontend solamente: _fullEvents, _raw, etc.) y el campo "action" (señal
+    // para el cliente, no aporta razonamiento al modelo).
+    // El toolResult COMPLETO se conserva en toolCallLog para el frontend.
+    const trimForLLM = (obj) => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+      return Object.fromEntries(
+        Object.entries(obj)
+          .filter(([k]) => !k.startsWith('_') && k !== 'action')
+          .map(([k, v]) => [k, typeof v === 'object' && v !== null && !Array.isArray(v)
+            ? trimForLLM(v)
+            : v
+          ])
+      );
+    };
 
     // Resolvemos tool-calls de forma NO-streaming en los saltos intermedios.
     while (hops < MAX_TOOL_HOPS) {
@@ -684,6 +703,8 @@ export default async function handler(req, res) {
       const functionCalls = midResult.response.functionCalls();
 
       if (!functionCalls || functionCalls.length === 0) {
+        // midResult ya contiene el texto de respuesta final en lenguaje natural
+        finalTextResponse = midResult.response.text();
         break;
       }
 
@@ -717,23 +738,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // ── FinOps: separación de capas ─────────────────────────────────────────
-      // trimForLLM() elimina cualquier campo prefijado con "_" (datos para el
-      // frontend solamente: _fullEvents, _raw, etc.) y el campo "action" (señal
-      // para el cliente, no aporta razonamiento al modelo).
-      // El toolResult COMPLETO se conserva en toolCallLog para el frontend.
-      const trimForLLM = (obj) => {
-        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
-        return Object.fromEntries(
-          Object.entries(obj)
-            .filter(([k]) => !k.startsWith('_') && k !== 'action')
-            .map(([k, v]) => [k, typeof v === 'object' && v !== null && !Array.isArray(v)
-              ? trimForLLM(v)
-              : v
-            ])
-        );
-      };
-
+      // En Gemini v1beta / 2.0+ las respuestas de función deben llevar role 'user'
       contents.push({
         role: 'user',
         parts: [{ functionResponse: { name: call.name, response: trimForLLM(toolResult) } }],
@@ -742,15 +747,24 @@ export default async function handler(req, res) {
       hops += 1;
     }
 
-    // ── Turno final: generamos el texto en modo STREAM ────────────────────────
+    // ── Turno final: emisión de respuesta vía SSE ────────────────────────────
     initSSE(res);
 
-    const streamResult = await model.generateContentStream({ contents });
-
-    for await (const chunk of streamResult.stream) {
-      const chunkText = chunk.text();
-      if (chunkText) {
-        sseWrite(res, { text: chunkText });
+    if (finalTextResponse) {
+      // FinOps: Evita duplicar llamadas y quemar tokens o provocar 503 por exceso de peticiones.
+      // Emitimos el texto ya generado en fragmentos fluidos para la experiencia en tiempo real del cliente.
+      const words = finalTextResponse.split(/(\s+)/);
+      for (const word of words) {
+        if (word) sseWrite(res, { text: word });
+      }
+    } else {
+      // Fallback si no hubo texto en midResult: streaming directo
+      const streamResult = await model.generateContentStream({ contents });
+      for await (const chunk of streamResult.stream) {
+        const chunkText = chunk.text();
+        if (chunkText) {
+          sseWrite(res, { text: chunkText });
+        }
       }
     }
 
@@ -762,19 +776,24 @@ export default async function handler(req, res) {
     console.error('[api/chat] Error en proveedor primario (Gemini):', geminiError.message || geminiError);
 
     // ── PLAN B: Fallback a Groq con stream: true ──────────────────────────────
-    const groqApiKey = process.env.GROQ_API_KEY || process.env.FALLBACK_API_KEY;
+    // Saneamiento de Key: ignorar claves con prefijo 'xai-' que pertenecen a otro proveedor
+    const rawGroqKey = process.env.GROQ_API_KEY || process.env.FALLBACK_API_KEY;
+    const groqApiKey = (rawGroqKey && !rawGroqKey.startsWith('xai-')) ? rawGroqKey : null;
+
     if (groqApiKey) {
       try {
-        console.log('[api/chat] Groq: Intentando respuesta vía Fallback streaming (llama-3.3-70b-versatile)...');
+        console.log('[api/chat] Groq: Intentando respuesta vía Fallback streaming...');
 
-        // ── FinOps: Mejora 4 — Sliding Window también en Groq ────────────────
-        // El path de Gemini ya recorta el historial, pero si falla y caemos aquí
-        // el rawHistory original (sin recortar) se enviaba íntegro a Groq.
-        // Reutilizamos la misma ventana para consistencia y control de costo.
+        // ── FinOps: Sliding Window también en Groq ────────────────────────────
         const groqMaxMsgs = (parseInt(process.env.HISTORY_WINDOW_TURNS || '6', 10)) * 2;
-        const groqHistory = rawHistory.length > groqMaxMsgs
+        let groqHistory = rawHistory.length > groqMaxMsgs
           ? rawHistory.slice(-groqMaxMsgs)
-          : rawHistory;
+          : [...rawHistory];
+
+        // Invariante Groq: El primer turno conversacional tras 'system' debe ser 'user'
+        while (groqHistory.length > 0 && groqHistory[0].role !== 'user') {
+          groqHistory.shift();
+        }
 
         if (rawHistory.length > groqMaxMsgs) {
           console.log(`[api/chat] Groq Sliding Window: historial recortado ${rawHistory.length} → ${groqHistory.length} mensajes`);
@@ -787,7 +806,6 @@ export default async function handler(req, res) {
             content: typeof m.content === 'string' ? m.content : String(m.content || ''),
           })),
         ];
-
 
         const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
@@ -855,7 +873,7 @@ export default async function handler(req, res) {
         console.error('[api/chat] Groq: Error en proveedor de Fallback:', groqError.message || groqError);
       }
     } else {
-      console.warn('[api/chat] Groq: Variable GROQ_API_KEY no configurada. Omitiendo Plan B.');
+      console.warn('[api/chat] Groq: Variable GROQ_API_KEY no configurada o inválida (Plan B omitido).');
     }
 
     // ── PLAN C: Graceful Degradation (un único chunk SSE de contingencia) ─────
