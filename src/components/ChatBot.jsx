@@ -86,11 +86,17 @@ export default function ChatBot() {
     const userMessage = { role: 'user', content: query.trim() };
     const updatedHistory = [...messages, userMessage];
 
-    // 1. Agrega el mensaje del usuario + un mensaje vacío del asistente
+    // 1. Agrega el mensaje del usuario + un mensaje vacío del asistente con flag loading
     //    que iremos llenando token a token.
     setMessages([
       ...updatedHistory,
-      { role: 'assistant', content: '', toolCalls: [], actions: { favorites: [], invites: [], itineraries: [] } },
+      {
+        role: 'assistant',
+        content: '',
+        loading: true,
+        toolCalls: [],
+        actions: { favorites: [], invites: [], itineraries: [] },
+      },
     ]);
     setInput('');
     setIsLoading(true);
@@ -126,11 +132,15 @@ export default function ChatBot() {
         }
 
         if (payload.text) {
-          // 4. Concatenamos el fragmento al último mensaje
+          // 4. Concatenamos el fragmento al último mensaje y liberamos el estado loading
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];
-            next[next.length - 1] = { ...last, content: last.content + payload.text };
+            next[next.length - 1] = {
+              ...last,
+              loading: false,
+              content: (last.content || '') + payload.text,
+            };
             return next;
           });
         }
@@ -163,11 +173,11 @@ export default function ChatBot() {
             }
           }
 
-          // Enriquecemos el último mensaje con los metadatos del cierre
+          // Enriquecemos el último mensaje con los metadatos del cierre y aseguramos loading: false
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];
-            next[next.length - 1] = { ...last, toolCalls, actions };
+            next[next.length - 1] = { ...last, loading: false, toolCalls, actions };
             return next;
           });
         }
@@ -200,17 +210,25 @@ export default function ChatBot() {
       }
     } catch (error) {
       console.error('[ChatBot] Error al comunicarse con /api/chat:', error);
-      // Reemplaza el mensaje vacío del asistente por el mensaje de error
+      // Reemplaza el mensaje del asistente por el mensaje de error y desactiva loading
       setMessages((prev) => {
         const next = [...prev];
         next[next.length - 1] = {
           role: 'assistant',
+          loading: false,
           content: `⚠️ Ocurrió un error al consultar con el Agente (${error.message}). Por favor, intenta nuevamente.`,
         };
         return next;
       });
     } finally {
       setIsLoading(false);
+      setMessages((prev) => {
+        const next = [...prev];
+        if (next.length > 0 && next[next.length - 1].loading) {
+          next[next.length - 1] = { ...next[next.length - 1], loading: false };
+        }
+        return next;
+      });
     }
   };
 
@@ -262,167 +280,215 @@ export default function ChatBot() {
 
           {/* Historial de Mensajes */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
-            {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex flex-col ${
-                  msg.role === 'user' ? 'items-end' : 'items-start'
-                }`}
-              >
+            {messages.map((msg, index) => {
+              const hasText = Boolean(typeof msg.content === 'string' ? msg.content.trim().length > 0 : msg.content);
+              const hasItineraries = Boolean(msg.actions?.itineraries && msg.actions.itineraries.length > 0);
+              const hasInvites = Boolean(msg.actions?.invites && msg.actions.invites.length > 0);
+              const hasValidContent = hasText || hasItineraries || hasInvites;
+
+              // Identificamos si este mensaje representa un estado de carga transitorio
+              const isMessageLoading = Boolean(
+                msg.loading ||
+                (isLoading && index === messages.length - 1 && msg.role === 'assistant' && !hasValidContent)
+              );
+
+              // Si el mensaje es un estado de carga (loading / typing), se muestra exclusivamente
+              // dentro de su propia burbuja unificada con los puntos animados, sin generar un nodo fantasma arriba.
+              if (isMessageLoading) {
+                return (
+                  <div
+                    key={index}
+                    data-testid="loading-message-bubble"
+                    className="flex flex-col items-start animate-in fade-in duration-200"
+                  >
+                    <div className="bg-slate-800 border border-white/10 text-slate-300 px-3 py-2 rounded-xl rounded-bl-xs flex items-center gap-1.5 shadow-md">
+                      <div className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-medium ml-1">
+                        Planificando itinerario y logística...
+                      </span>
+                    </div>
+                    <span className="text-[9px] text-slate-500 mt-0.5 px-1">
+                      EvenGo AI Agent
+                    </span>
+                  </div>
+                );
+              }
+
+              // Si el mensaje no contiene texto ni componentes interactivos válidos,
+              // nunca renderizamos el contenedor visual (evita la burbuja vacía y etiqueta de autor fantasma).
+              if (!hasValidContent) {
+                return null;
+              }
+
+              return (
                 <div
-                  className={`max-w-[90%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-xs shadow-md shadow-indigo-600/20'
-                      : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-xs shadow-md'
+                  key={index}
+                  className={`flex flex-col ${
+                    msg.role === 'user' ? 'items-end' : 'items-start'
                   }`}
                 >
+                  <div
+                    className={`max-w-[90%] px-3 py-2 rounded-xl text-[13px] leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-indigo-600 text-white rounded-br-xs shadow-md shadow-indigo-600/20'
+                        : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-xs shadow-md'
+                    }`}
+                  >
+                    {hasText && (
+                      msg.role === 'assistant' ? (
+                        <ReactMarkdown components={markdownComponents}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      ) : (
+                        <span className="whitespace-pre-wrap">{msg.content}</span>
+                      )
+                    )}
 
+                    {/* Tarjetas de Itinerarios Ejecutados */}
+                    {hasItineraries && (
+                      <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
+                        {msg.actions.itineraries.map((itin, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-slate-950/70 border border-indigo-500/30 rounded-xl p-2.5 text-xs text-slate-200 flex flex-col gap-1.5"
+                          >
+                            <div className="flex items-center justify-between font-bold text-white text-[12px]">
+                              <span>🗺️ {itin.title}</span>
+                              <span className="text-[10px] bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded font-mono">
+                                {itin.date}
+                              </span>
+                            </div>
 
-                  {msg.role === 'assistant' ? (
-                    <ReactMarkdown components={markdownComponents}>
-                      {msg.content}
-                    </ReactMarkdown>
-                  ) : (
-                    <span className="whitespace-pre-wrap">{msg.content}</span>
-                  )}
+                            {/* Badge de Clima */}
+                            {itin.weather && (
+                              <div className="text-[11px] text-slate-300 flex items-center gap-1.5 bg-slate-900/60 p-1.5 rounded-lg border border-white/5">
+                                <span>{itin.weather.willRain ? '🌧️' : '☀️'}</span>
+                                <span>
+                                  Máx {itin.weather.tempMaxC}°C / Mín {itin.weather.tempMinC}°C
+                                </span>
+                                <span className="text-slate-400 text-[10px]">
+                                  ({itin.weather.rainProbability}% prob. lluvia)
+                                </span>
+                              </div>
+                            )}
 
-                  {/* Tarjetas de Itinerarios Ejecutados */}
-                  {msg.actions?.itineraries && msg.actions.itineraries.length > 0 && (
-                    <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
-                      {msg.actions.itineraries.map((itin, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-slate-950/70 border border-indigo-500/30 rounded-xl p-2.5 text-xs text-slate-200 flex flex-col gap-1.5"
-                        >
-                          <div className="flex items-center justify-between font-bold text-white text-[12px]">
-                            <span>🗺️ {itin.title}</span>
-                            <span className="text-[10px] bg-indigo-500/30 text-indigo-200 px-1.5 py-0.5 rounded font-mono">
-                              {itin.date}
-                            </span>
+                            {/* Evento Principal con botón de anchor interno */}
+                            {itin.primaryEvent && (
+                              <div className="flex items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/20 p-1.5 rounded-lg">
+                                <span className="text-[11px] text-indigo-200 font-semibold truncate">
+                                  ⭐ {itin.primaryEvent.title}
+                                </span>
+                                {itin.primaryEvent.anchorLink && (
+                                  <button
+                                    onClick={() => {
+                                      const el = document.querySelector(itin.primaryEvent.anchorLink);
+                                      if (el) {
+                                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
+                                        el.classList.add(...cls);
+                                        setTimeout(() => el.classList.remove(...cls), 3000);
+                                      }
+                                    }}
+                                    className="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-md font-semibold transition-colors whitespace-nowrap"
+                                  >
+                                    📍 Ver en EvenGo
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Eventos Alternativos con botones internos */}
+                            {itin.alternativeEvents?.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alternativas:</span>
+                                {itin.alternativeEvents.map((ev, eIdx) => (
+                                  <div key={eIdx} className="flex items-center justify-between gap-2">
+                                    <span className="text-[11px] text-slate-300 truncate">{ev.title}</span>
+                                    {ev.anchorLink && (
+                                      <button
+                                        onClick={() => {
+                                          const el = document.querySelector(ev.anchorLink);
+                                          if (el) {
+                                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                            const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
+                                            el.classList.add(...cls);
+                                            setTimeout(() => el.classList.remove(...cls), 3000);
+                                          }
+                                        }}
+                                        className="flex-shrink-0 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded-md font-semibold transition-colors whitespace-nowrap"
+                                      >
+                                        📍 Ver
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {itin.timeline && (
+                              <div className="space-y-1 my-1">
+                                <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">
+                                  Cronograma Sugerido:
+                                </span>
+                                {itin.timeline.map((step, sIdx) => (
+                                  <div key={sIdx} className="flex items-start gap-1.5 text-[11px]">
+                                    <span className="font-mono text-indigo-300 font-semibold w-10 flex-shrink-0">
+                                      {step.time}
+                                    </span>
+                                    <span className="text-slate-300">{step.activity}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Consejo de vestimenta/logística */}
+                            {itin.logistics?.clothingTip && (
+                              <p className="text-[10px] italic text-slate-400 bg-white/5 p-1.5 rounded">
+                                💡 {itin.logistics.clothingTip}
+                              </p>
+                            )}
                           </div>
+                        ))}
+                      </div>
+                    )}
 
-                          {/* Badge de Clima */}
-                          {itin.weather && (
-                            <div className="text-[11px] text-slate-300 flex items-center gap-1.5 bg-slate-900/60 p-1.5 rounded-lg border border-white/5">
-                              <span>{itin.weather.willRain ? '🌧️' : '☀️'}</span>
-                              <span>
-                                Máx {itin.weather.tempMaxC}°C / Mín {itin.weather.tempMinC}°C
-                              </span>
-                              <span className="text-slate-400 text-[10px]">
-                                ({itin.weather.rainProbability}% prob. lluvia)
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Evento Principal con botón de anchor interno */}
-                          {itin.primaryEvent && (
-                            <div className="flex items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/20 p-1.5 rounded-lg">
-                              <span className="text-[11px] text-indigo-200 font-semibold truncate">
-                                ⭐ {itin.primaryEvent.title}
-                              </span>
-                              {itin.primaryEvent.anchorLink && (
-                                <button
-                                  onClick={() => {
-                                    const el = document.querySelector(itin.primaryEvent.anchorLink);
-                                    if (el) {
-                                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                      const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
-                                      el.classList.add(...cls);
-                                      setTimeout(() => el.classList.remove(...cls), 3000);
-                                    }
-                                  }}
-                                  className="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-md font-semibold transition-colors whitespace-nowrap"
-                                >
-                                  📍 Ver en EvenGo
-                                </button>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Eventos Alternativos con botones internos */}
-                          {itin.alternativeEvents?.length > 0 && (
-                            <div className="space-y-1">
-                              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alternativas:</span>
-                              {itin.alternativeEvents.map((ev, eIdx) => (
-                                <div key={eIdx} className="flex items-center justify-between gap-2">
-                                  <span className="text-[11px] text-slate-300 truncate">{ev.title}</span>
-                                  {ev.anchorLink && (
-                                    <button
-                                      onClick={() => {
-                                        const el = document.querySelector(ev.anchorLink);
-                                        if (el) {
-                                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                          const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
-                                          el.classList.add(...cls);
-                                          setTimeout(() => el.classList.remove(...cls), 3000);
-                                        }
-                                      }}
-                                      className="flex-shrink-0 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded-md font-semibold transition-colors whitespace-nowrap"
-                                    >
-                                      📍 Ver
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {itin.timeline && (
-                            <div className="space-y-1 my-1">
-                              <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">
-                                Cronograma Sugerido:
-                              </span>
-                              {itin.timeline.map((step, sIdx) => (
-                                <div key={sIdx} className="flex items-start gap-1.5 text-[11px]">
-                                  <span className="font-mono text-indigo-300 font-semibold w-10 flex-shrink-0">
-                                    {step.time}
-                                  </span>
-                                  <span className="text-slate-300">{step.activity}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Consejo de vestimenta/logística */}
-                          {itin.logistics?.clothingTip && (
-                            <p className="text-[10px] italic text-slate-400 bg-white/5 p-1.5 rounded">
-                              💡 {itin.logistics.clothingTip}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Acciones de Descarga de Calendario (.ics) */}
-                  {msg.actions?.invites && msg.actions.invites.length > 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-col gap-1.5">
-                      <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
-                        📅 Pases de Calendario listos:
-                      </span>
-                      {msg.actions.invites.map((inv, idx) => (
-                        <a
-                          key={idx}
-                          href={inv.downloadUrl}
-                          download={inv.filename}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[11px] font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
-                        >
-                          📥 Descargar .ics: {inv.title}
-                        </a>
-                      ))}
-                    </div>
-                  )}
+                    {/* Acciones de Descarga de Calendario (.ics) */}
+                    {hasInvites && (
+                      <div className="mt-2.5 pt-2 border-t border-white/10 flex flex-col gap-1.5">
+                        <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1">
+                          📅 Pases de Calendario listos:
+                        </span>
+                        {msg.actions.invites.map((inv, idx) => (
+                          <a
+                            key={idx}
+                            href={inv.downloadUrl}
+                            download={inv.filename}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[11px] font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                          >
+                            📥 Descargar .ics: {inv.title}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[9px] text-slate-500 mt-0.5 px-1">
+                    {msg.role === 'user' ? 'Tú' : 'EvenGo AI Agent'}
+                  </span>
                 </div>
-                <span className="text-[9px] text-slate-500 mt-0.5 px-1">
-                  {msg.role === 'user' ? 'Tú' : 'EvenGo AI Agent'}
-                </span>
-              </div>
-            ))}
+              );
+            })}
 
-            {/* Indicador de Carga */}
-            {isLoading && (
-              <div className="flex flex-col items-start">
-                <div className="bg-slate-800 border border-white/10 text-slate-300 px-3 py-2 rounded-xl rounded-bl-xs flex items-center gap-1.5">
+            {/* Indicador de Carga Fallback (solo si no se está renderizando dentro de un mensaje en el historial) */}
+            {isLoading && (messages.length === 0 || messages[messages.length - 1].role !== 'assistant') && (
+              <div
+                data-testid="loading-fallback-bubble"
+                className="flex flex-col items-start animate-in fade-in duration-200"
+              >
+                <div className="bg-slate-800 border border-white/10 text-slate-300 px-3 py-2 rounded-xl rounded-bl-xs flex items-center gap-1.5 shadow-md">
                   <div className="flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -430,6 +496,9 @@ export default function ChatBot() {
                   </div>
                   <span className="text-[11px] text-slate-400 font-medium ml-1">Planificando itinerario y logística...</span>
                 </div>
+                <span className="text-[9px] text-slate-500 mt-0.5 px-1">
+                  EvenGo AI Agent
+                </span>
               </div>
             )}
 

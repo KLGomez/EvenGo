@@ -26,6 +26,7 @@ export function useEventAnalytics(events = []) {
           topNeighborhood: 'Sin datos',
           freePercentage: '0%',
           nextEvent: 'No hay próximos',
+          nextEventItem: null,
         },
       };
     }
@@ -100,18 +101,20 @@ export function useEventAnalytics(events = []) {
         const rawDate = e.startDate || e.date || e.fecha;
         if (!rawDate) return null;
         const parsedDate = new Date(rawDate);
-        return isNaN(parsedDate.getTime()) ? null : { title: e.title, time: parsedDate.getTime() };
+        return isNaN(parsedDate.getTime()) ? null : { ...e, timeEpoch: parsedDate.getTime() };
       })
-      .filter((e) => e !== null && e.time >= now)
-      .sort((a, b) => a.time - b.time);
+      .filter((e) => e !== null && e.timeEpoch >= now)
+      .sort((a, b) => a.timeEpoch - b.timeEpoch);
 
-    const nextEvent = futureEvents.length > 0 ? futureEvents[0].title : 'No hay próximos';
+    const nextEventItem = futureEvents.length > 0 ? futureEvents[0] : (events.length > 0 ? events[0] : null);
+    const nextEvent = nextEventItem ? nextEventItem.title : 'No hay próximos';
 
     const kpis = {
       totalEvents,
       topNeighborhood,
       freePercentage,
       nextEvent,
+      nextEventItem,
     };
 
     return {

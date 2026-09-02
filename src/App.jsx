@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import FilterPanel from './components/FilterPanel';
@@ -15,6 +15,7 @@ import { useEventContext } from './hooks/useEventContext';
  * Vista Principal: Agenda de Eventos
  */
 function HomeView() {
+  const { id } = useParams();
   const {
     filters,
     filteredEvents,
@@ -26,6 +27,20 @@ function HomeView() {
     usingMocks,
     retry,
   } = useEventContext();
+
+  useEffect(() => {
+    if (id) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`event-${id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('ring-2', 'ring-pink-500');
+          setTimeout(() => el.classList.remove('ring-2', 'ring-pink-500'), 2500);
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [id, filteredEvents]);
 
   return (
     <main className="max-w-7xl mx-auto px-4 sm:px-6 pb-20">
@@ -87,7 +102,7 @@ export default function App() {
         <div className="min-h-screen bg-slate-950 text-white">
           {/* Fondo estético con gradiente radial */}
           <div
-            className="fixed inset-0 pointer-events-none z-0"
+            className="fixed inset-0 pointer-events-none z-0 no-print print:hidden"
             style={{
               background:
                 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.12), transparent)',
@@ -97,25 +112,32 @@ export default function App() {
 
           <div className="relative z-10">
             {/* Navbar compartido en todas las rutas */}
-            <Navbar />
+            <div className="no-print print:hidden">
+              <Navbar />
+            </div>
 
             {/* Configuración de Rutas */}
             <Routes>
               {/* Ruta Principal: Agenda de Eventos */}
               <Route path="/" element={<HomeView />} />
+              <Route path="/eventos/:id" element={<HomeView />} />
 
               {/* Ruta Inmersiva: Radar Cultural (Dashboard Analítico) */}
               <Route path="/radar-cultural" element={<Dashboard />} />
             </Routes>
 
             {/* Widget de Asistente Virtual Flotante (Google Gemini) */}
-            <ChatBot />
+            <div className="no-print print:hidden">
+              <ChatBot />
+            </div>
 
             {/* Botón flotante para regresar al inicio (Scroll to top) */}
-            <ScrollToTop />
+            <div className="no-print print:hidden">
+              <ScrollToTop />
+            </div>
 
             {/* Footer Global */}
-            <footer className="border-t border-white/5 py-8 text-center">
+            <footer className="border-t border-white/5 py-8 text-center no-print print:hidden">
               <p className="text-slate-600 text-sm">
                 © 2026{' '}
                 <span className="text-indigo-400 font-semibold">EvenGo</span>{' '}
