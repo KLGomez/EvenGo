@@ -421,5 +421,73 @@ describe('ChatBot Component - UI States & Conditional Rendering', () => {
 
     primaryEventCard.remove();
   });
+
+  it('invoca el callback onClose y soporta enlaces en formato /eventos/:id', async () => {
+    const targetCard = document.createElement('div');
+    targetCard.id = 'event-77';
+    targetCard.textContent = 'Stand Up Palermo';
+    targetCard.scrollIntoView = vi.fn();
+    document.body.appendChild(targetCard);
+
+    const onCloseMock = vi.fn();
+    const encoder = new TextEncoder();
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"text":"Revisá: [Stand Up](#/eventos/77) este fin de semana."}\n\n')
+          );
+          controller.enqueue(
+            encoder.encode('data: {"done":true,"toolCalls":[],"actions":{}}\n\n')
+          );
+          controller.close();
+        },
+      }),
+    });
+
+    await act(async () => {
+      root.render(<ChatBot onClose={onCloseMock} />);
+    });
+
+    const openBtn = container.querySelector('button[aria-label="Abrir asistente de IA"]');
+    await act(async () => {
+      openBtn.click();
+    });
+
+    const input = container.querySelector('input[type="text"]');
+    const sendBtn = container.querySelector('button[aria-label="Enviar mensaje"]');
+
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      ).set;
+      nativeInputValueSetter.call(input, 'humor');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await act(async () => {
+      sendBtn.click();
+    });
+
+    const link = container.querySelector('a');
+    expect(link).toBeTruthy();
+
+    await act(async () => {
+      link.click();
+    });
+
+    // Chat cerrado y onClose invocado
+    expect(container.querySelector('input[placeholder="Pide un plan, evento o sugerencia..."]')).toBeNull();
+    expect(onCloseMock).toHaveBeenCalledTimes(1);
+
+    // Scroll ejecutado
+    expect(targetCard.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+
+    targetCard.remove();
+  });
 });
+
 

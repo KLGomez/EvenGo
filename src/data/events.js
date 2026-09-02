@@ -39,7 +39,7 @@ export const mockEvents = [
     description:
       'Una jornada de rock nacional con las mejores bandas emergentes de Buenos Aires. Entrada libre y gratuita para toda la familia.',
     category: 'Musical',
-    date: '2026-08-02',
+    date: '2026-09-05',
     time: '18:00',
     location: 'Palermo',
     address: 'Av. Ángel Gallardo 490, Parque Centenario',
@@ -52,7 +52,7 @@ export const mockEvents = [
     description:
       'Más de 40 puestos con cocina argentina, fusión y street food en el barrio más bohemio de la ciudad. Degustaciones y show de tango en vivo.',
     category: 'Gastronomía',
-    date: '2026-08-03',
+    date: '2026-09-06',
     time: '12:00',
     location: 'San Telmo',
     address: 'Defensa 1100, Plaza Dorrego',
@@ -65,7 +65,7 @@ export const mockEvents = [
     description:
       'Carrera de 5 y 10 km a beneficio del Hospital Interzonal de Quilmes. Apta para corredores de todos los niveles. Inscripción anticipada con cupo limitado.',
     category: 'Deportivo',
-    date: '2026-08-07',
+    date: '2026-09-12',
     time: '08:00',
     location: 'Quilmes',
     address: 'Av. Rivadavia 200, Quilmes Centro',
@@ -78,7 +78,7 @@ export const mockEvents = [
     description:
       'Muestra colectiva de arte urbano, graffiti y stencil en pleno centro porteño. Artistas locales e internacionales intervienen el espacio público.',
     category: 'Cultural',
-    date: '2026-08-05',
+    date: '2026-09-10',
     time: '15:00',
     location: 'Obelisco / Centro',
     address: 'Av. Corrientes 1600, CABA',
@@ -91,7 +91,7 @@ export const mockEvents = [
     description:
       'Dos días de jazz y blues al aire libre en el colorido barrio de La Boca. Músicos nacionales e invitados de Brasil y Uruguay.',
     category: 'Musical',
-    date: '2026-08-09',
+    date: '2026-09-13',
     time: '20:00',
     location: 'La Boca',
     address: 'Caminito 100, La Boca',
@@ -104,7 +104,7 @@ export const mockEvents = [
     description:
       'Torneo clasificatorio de ajedrez con modalidad suiza, abierto a todas las categorías. Premios para los tres primeros puestos de cada rama.',
     category: 'Deportivo',
-    date: '2026-08-14',
+    date: '2026-09-19',
     time: '10:00',
     location: 'Belgrano',
     address: 'Cuba 2222, Club Atlético Belgrano',
@@ -117,7 +117,7 @@ export const mockEvents = [
     description:
       'Proyecciones de clásicos del cine mudo con acompañamiento musical en vivo a cargo del ensamble Tango & Groove.',
     category: 'Cultural',
-    date: '2026-08-01',
+    date: '2026-09-08',
     time: '21:00',
     location: 'Palermo',
     address: 'Thames 1744, Cine Arte Palermo',
@@ -130,7 +130,7 @@ export const mockEvents = [
     description:
       'El mayor encuentro de gastronomía vegana y plant-based de Buenos Aires. Más de 60 emprendedores, talleres de cocina y música en vivo.',
     category: 'Gastronomía',
-    date: '2026-08-16',
+    date: '2026-09-20',
     time: '10:30',
     location: 'Belgrano',
     address: 'Juramento 1400, Belgrano',

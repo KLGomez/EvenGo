@@ -1,14 +1,44 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, useContext } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { EventContext } from '../context/EventContext';
 
 /**
  * ChatBot: Asistente Virtual Conversacional & Concierge Ejecutivo de EvenGo.
  * Soporta itinerarios autónomos (plan_itinerary), clima, guardado de favoritos y descargas .ics.
+ * 
+ * @param {Object} [props]
+ * @param {boolean} [props.isOpen] - Control externo opcional de visibilidad del modal
+ * @param {Function} [props.onClose] - Callback invocado al cerrar el chat
  */
-export default function ChatBot() {
-  const [isOpen, setIsOpen] = useState(false);
+export default function ChatBot({ isOpen: isOpenProp, onClose }) {
+  const [isOpenInternal, setIsOpenInternal] = useState(false);
+  const isOpen = isOpenProp !== undefined ? isOpenProp : isOpenInternal;
+
+  const closeChat = useCallback(() => {
+    setIsOpenInternal(false);
+    if (typeof onClose === 'function') {
+      onClose();
+    }
+  }, [onClose]);
+
+  const openChat = useCallback(() => {
+    setIsOpenInternal(true);
+  }, []);
+
+  const toggleChat = useCallback(() => {
+    if (isOpen) {
+      closeChat();
+    } else {
+      openChat();
+    }
+  }, [isOpen, closeChat, openChat]);
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Acceso seguro al contexto de eventos para poder limpiar filtros si el evento recomendado está oculto
+  const eventCtx = useContext(EventContext);
+  const resetFilters = eventCtx?.resetFilters;
 
   const [messages, setMessages] = useState([
     {
@@ -32,41 +62,122 @@ export default function ChatBot() {
 
   /**
    * Manejador de selección de evento recomendado:
-   * 1. Cierra automáticamente la ventana flotante del chat para despejar la vista.
-   * 2. Desplaza suavemente hacia la tarjeta correspondiente en la grilla y aplica feedback visual destacado.
+   * 1. Cierra automáticamente la ventana flotante del chat (soporta estado interno y callback onClose).
+   * 2. Resuelve de forma tolerante el ID del evento (#event-1, event-1, #1, 1, /eventos/1, https://...).
+   * 3. Si hay filtros activos que ocultan el evento, los limpia con resetFilters().
+   * 4. Si el usuario está fuera de la agenda (ej: /radar-cultural), navega hacia la agenda.
+   * 5. Realiza scrollIntoView suave hacia la tarjeta del evento y aplica feedback visual destacado.
    */
-  const handleEventSelect = useCallback((anchorLink) => {
-    if (!anchorLink) return;
+  const handleEventSelect = useCallback(
+    (target) => {
+      if (!target) return;
 
-    // 1. Cerrar automáticamente la ventana flotante del chat
-    setIsOpen(false);
+      // 1. Cerrar automáticamente la ventana flotante del chat
+      closeChat();
 
-    // 2. Navegación y scroll suave hacia la tarjeta del evento en la agenda
-    const executeScroll = () => {
-      const element = document.querySelector(anchorLink);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const highlightClasses = [
-          'ring-4',
-          'ring-pink-500',
-          'bg-indigo-900/40',
-          'scale-[1.03]',
-          'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
-          'z-10',
-        ];
-        element.classList.add(...highlightClasses);
-        setTimeout(() => {
-          element.classList.remove(...highlightClasses);
-        }, 3000);
+      // 2. Extraer el identificador base de forma tolerante a cualquier formato
+      let cleanTarget = String(target).trim();
+      if (cleanTarget.includes('#')) {
+        cleanTarget = cleanTarget.split('#').pop();
       }
-    };
+      if (cleanTarget.includes('/eventos/')) {
+        cleanTarget = cleanTarget.split('/eventos/')[1];
+      }
+      // Limpiar barras iniciales o query params restantes
+      cleanTarget = cleanTarget.replace(/^\/+/, '').split('/')[0].split('?')[0];
 
-    // Ejecuta de inmediato
-    executeScroll();
+      const idWithoutPrefix = cleanTarget.startsWith('event-')
+        ? cleanTarget.replace(/^event-/, '')
+        : cleanTarget;
+      const idWithPrefix = cleanTarget.startsWith('event-')
+        ? cleanTarget
+        : `event-${cleanTarget}`;
 
-    // Re-ejecuta tras el cierre del modal para garantizar centrado si hubo reajuste de layout
-    setTimeout(executeScroll, 120);
-  }, []);
+      // 3. Función auxiliar para encontrar el elemento de la tarjeta en el DOM
+      const findElement = () => {
+        // A) Búsqueda directa por ID (segura y no propensa a excepciones de selector CSS)
+        let el =
+          document.getElementById(idWithPrefix) ||
+          document.getElementById(idWithoutPrefix) ||
+          document.getElementById(cleanTarget);
+        if (el) return el;
+
+        // B) Búsqueda por selectores CSS tolerantes
+        try {
+          el =
+            document.querySelector(`#${idWithPrefix}`) ||
+            document.querySelector(`#${cleanTarget}`) ||
+            document.querySelector(`[id="event-${idWithoutPrefix}"]`) ||
+            document.querySelector(`article[id*="${idWithoutPrefix}"]`);
+          if (el) return el;
+        } catch {
+          // Ignorar errores si el selector es inválido
+        }
+
+        // C) Búsqueda por coincidencia de texto en tarjetas de eventos
+        try {
+          const query = decodeURIComponent(idWithoutPrefix).toLowerCase().replace(/[-_]/g, ' ');
+          if (query.length >= 3) {
+            const articles = document.querySelectorAll('article[id^="event-"]');
+            for (const art of articles) {
+              if (art.textContent.toLowerCase().includes(query)) {
+                return art;
+              }
+            }
+          }
+        } catch {}
+
+        return null;
+      };
+
+      // 4. Si el usuario se encuentra en otra ruta (ej: /radar-cultural), navegar a la agenda
+      if (
+        typeof window !== 'undefined' &&
+        window.location.pathname !== '/' &&
+        !window.location.pathname.startsWith('/eventos')
+      ) {
+        window.location.href = `/#${idWithPrefix}`;
+        return;
+      }
+
+      // 5. Si el evento no está en el DOM pero existen filtros activos, limpiarlos para revelarlo
+      const initialEl = findElement();
+      if (!initialEl && typeof resetFilters === 'function') {
+        resetFilters();
+      }
+
+      // 6. Ejecutar scroll suave y resaltado con halo visual
+      const executeScroll = () => {
+        const el = findElement();
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const highlightClasses = [
+            'ring-4',
+            'ring-pink-500',
+            'bg-indigo-900/40',
+            'scale-[1.03]',
+            'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
+            'z-10',
+          ];
+          el.classList.add(...highlightClasses);
+          setTimeout(() => {
+            el.classList.remove(...highlightClasses);
+          }, 3000);
+          return true;
+        }
+        return false;
+      };
+
+      // Inmediato
+      executeScroll();
+
+      // Intentos escalonados para compensar el desmontaje del modal o la actualización de filtros
+      setTimeout(executeScroll, 60);
+      setTimeout(executeScroll, 160);
+      setTimeout(executeScroll, 380);
+    },
+    [closeChat, resetFilters]
+  );
 
   // Componentes de estilizado Markdown conectados con el cierre y navegación del chat
   const markdownComponents = useMemo(
@@ -78,26 +189,35 @@ export default function ChatBot() {
       strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
       h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
       h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
-      a: ({ href, children }) => {
-        const isAnchor = href?.startsWith('#');
+      a: ({ href, children, ...props }) => {
+        const isEventLink =
+          Boolean(href) &&
+          (href.startsWith('#') ||
+            href.startsWith('event-') ||
+            href.includes('/eventos/') ||
+            href.includes('#event-') ||
+            !href.startsWith('http'));
 
         const handleClick = (e) => {
-          if (isAnchor) {
+          if (isEventLink) {
             e.preventDefault();
             handleEventSelect(href);
+          } else if (href && href.includes('#event-')) {
+            e.preventDefault();
+            const anchor = '#' + href.split('#')[1];
+            handleEventSelect(anchor);
           }
         };
 
         return (
           <a
-            href={isAnchor ? href : undefined}
+            href={href || '#'}
             onClick={handleClick}
-            target={isAnchor ? '_self' : undefined}
-            rel={isAnchor ? undefined : 'noopener noreferrer'}
             className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
+            {...props}
           >
             {children}
-            <span className="text-[10px]">{isAnchor ? '📍' : '🔗'}</span>
+            <span className="text-[10px]">📍</span>
           </a>
         );
       },
@@ -296,7 +416,7 @@ export default function ChatBot() {
               </div>
             </div>
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={closeChat}
               className="text-slate-400 hover:text-white hover:bg-white/10 p-1 rounded-md transition-colors text-xs"
               aria-label="Cerrar chat"
             >
@@ -406,19 +526,17 @@ export default function ChatBot() {
                             {itin.primaryEvent && (
                               <div className="flex items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/20 p-1.5 rounded-lg">
                                 <span
-                                  onClick={itin.primaryEvent.anchorLink ? () => handleEventSelect(itin.primaryEvent.anchorLink) : undefined}
-                                  className={`text-[11px] text-indigo-200 font-semibold truncate ${itin.primaryEvent.anchorLink ? 'cursor-pointer hover:underline' : ''}`}
+                                  onClick={() => handleEventSelect(itin.primaryEvent.anchorLink || itin.primaryEvent.title)}
+                                  className="text-[11px] text-indigo-200 font-semibold truncate cursor-pointer hover:underline"
                                 >
                                   ⭐ {itin.primaryEvent.title}
                                 </span>
-                                {itin.primaryEvent.anchorLink && (
-                                  <button
-                                    onClick={() => handleEventSelect(itin.primaryEvent.anchorLink)}
-                                    className="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-md font-semibold transition-colors whitespace-nowrap cursor-pointer"
-                                  >
-                                    📍 Ver en EvenGo
-                                  </button>
-                                )}
+                                <button
+                                  onClick={() => handleEventSelect(itin.primaryEvent.anchorLink || itin.primaryEvent.title)}
+                                  className="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-md font-semibold transition-colors whitespace-nowrap cursor-pointer"
+                                >
+                                  📍 Ver en EvenGo
+                                </button>
                               </div>
                             )}
 
@@ -426,24 +544,26 @@ export default function ChatBot() {
                             {itin.alternativeEvents?.length > 0 && (
                               <div className="space-y-1">
                                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alternativas:</span>
-                                {itin.alternativeEvents.map((ev, eIdx) => (
-                                  <div key={eIdx} className="flex items-center justify-between gap-2">
-                                    <span
-                                      onClick={ev.anchorLink ? () => handleEventSelect(ev.anchorLink) : undefined}
-                                      className={`text-[11px] text-slate-300 truncate ${ev.anchorLink ? 'cursor-pointer hover:underline' : ''}`}
-                                    >
-                                      {ev.title}
-                                    </span>
-                                    {ev.anchorLink && (
+                                {itin.alternativeEvents.map((ev, eIdx) => {
+                                  const altTitle = ev.title || ev.titulo || 'Evento alternativo';
+                                  const altTarget = ev.anchorLink || altTitle;
+                                  return (
+                                    <div key={eIdx} className="flex items-center justify-between gap-2">
+                                      <span
+                                        onClick={() => handleEventSelect(altTarget)}
+                                        className="text-[11px] text-slate-300 truncate cursor-pointer hover:underline"
+                                      >
+                                        {altTitle}
+                                      </span>
                                       <button
-                                        onClick={() => handleEventSelect(ev.anchorLink)}
+                                        onClick={() => handleEventSelect(altTarget)}
                                         className="flex-shrink-0 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded-md font-semibold transition-colors whitespace-nowrap cursor-pointer"
                                       >
                                         📍 Ver
                                       </button>
-                                    )}
-                                  </div>
-                                ))}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
 
@@ -566,7 +686,7 @@ export default function ChatBot() {
 
       {/* Botón Flotante Principal */}
       <button
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={toggleChat}
         className={`group relative flex items-center justify-center p-3.5 rounded-full shadow-2xl transition-all duration-300 active:scale-95 ${
           isOpen
             ? 'bg-slate-800 text-slate-300 border border-white/20 hover:bg-slate-700'

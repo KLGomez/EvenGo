@@ -93,12 +93,32 @@ export default function FavoritesDrawer({ isOpen, onClose, favorites: favoritesP
                     {/* Contenedor interactivo de información del evento con redirección */}
                     <div
                       onClick={() => {
-                        const targetUrl =
-                          typeof event === 'object' && event !== null
-                            ? event.url || event.link
-                            : null;
-                        if (targetUrl) {
-                          window.open(targetUrl, '_blank');
+                        if (typeof onClose === 'function') {
+                          onClose();
+                        }
+                        const el =
+                          document.getElementById(`event-${eventId}`) ||
+                          document.getElementById(String(eventId));
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          const cls = [
+                            'ring-4',
+                            'ring-pink-500',
+                            'bg-indigo-900/40',
+                            'scale-[1.03]',
+                            'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
+                            'z-10',
+                          ];
+                          el.classList.add(...cls);
+                          setTimeout(() => el.classList.remove(...cls), 3000);
+                        } else {
+                          const targetUrl =
+                            typeof event === 'object' && event !== null
+                              ? event.url || event.link
+                              : null;
+                          if (targetUrl) {
+                            window.open(targetUrl, '_blank');
+                          }
                         }
                       }}
                       className="flex flex-col gap-1 min-w-0 flex-1 cursor-pointer hover:bg-slate-700/30 transition-colors rounded-lg p-1 -ml-1"

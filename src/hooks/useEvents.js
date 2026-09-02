@@ -131,13 +131,15 @@ export function useEvents() {
       } else {
         // El backend respondió OK pero sin eventos vigentes
         console.warn('[EvenGo] /api/events retornó 0 eventos vigentes. Usando datos de demostración.');
-        setEvents(mockEvents.filter((event) => isEventUpcoming(event.date, event.time)));
+        const fallbackMocks = mockEvents.filter((event) => isEventUpcoming(event.date, event.time));
+        setEvents(fallbackMocks.length > 0 ? fallbackMocks : mockEvents);
         setUsingMocks(true);
       }
     } catch (err) {
       console.error('[EvenGo] Error al cargar eventos desde /api/events:', err.message);
       // En caso de error mantenemos los mocks vigentes visibles para el usuario
-      setEvents(mockEvents.filter((event) => isEventUpcoming(event.date, event.time)));
+      const fallbackMocks = mockEvents.filter((event) => isEventUpcoming(event.date, event.time));
+      setEvents(fallbackMocks.length > 0 ? fallbackMocks : mockEvents);
       setError(err.message);
       setUsingMocks(true);
     } finally {
