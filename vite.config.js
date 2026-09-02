@@ -37,9 +37,8 @@ export default defineConfig({
     })
   ],
   test: {
-    // Tests de API (Node.js puro, sin DOM)
+    globals: true,
     environment: 'node',
-    // Tests de hooks de React usan jsdom
     environmentMatchGlobs: [
       ['src/**/*.test.{js,jsx}', 'jsdom'],
     ],
@@ -47,6 +46,8 @@ export default defineConfig({
       'api/**/*.test.js',
       'src/**/*.test.{js,jsx}',
     ],
-    globals: true,
+    exclude: ['node_modules', 'dist'],
+    css: true,
   },
 })
+

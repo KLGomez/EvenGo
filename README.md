@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # 🗺️ EvenGo — Smart Cultural Event Planner
 
@@ -285,7 +285,7 @@ EvenGo/
 
 ### Prerrequisitos
 
-- Node.js ≥ 18
+- Node.js ≥ 22 (LTS)
 - [Vercel CLI](https://vercel.com/docs/cli) — necesario para las Serverless Functions locales
 
 ```bash
