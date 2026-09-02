@@ -1,54 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
-
-// ── Componentes de estilizado Markdown desacoplados del ciclo de render de React ──────
-const markdownComponents = {
-  p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
-  ul: ({ children }) => <ul className="list-disc ml-4 mb-1.5 space-y-0.5">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal ml-4 mb-1.5 space-y-0.5">{children}</ol>,
-  li: ({ children }) => <li className="mb-0.5">{children}</li>,
-  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-  h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
-  h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
-  a: ({ href, children }) => {
-    const isAnchor = href?.startsWith('#');
-
-    const handleClick = (e) => {
-      if (isAnchor) {
-        e.preventDefault();
-        const element = document.querySelector(href);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          const highlightClasses = [
-            'ring-4',
-            'ring-pink-500',
-            'bg-indigo-900/40',
-            'scale-[1.03]',
-            'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
-            'z-10',
-          ];
-          element.classList.add(...highlightClasses);
-          setTimeout(() => {
-            element.classList.remove(...highlightClasses);
-          }, 3000);
-        }
-      }
-    };
-
-    return (
-      <a
-        href={isAnchor ? href : undefined}
-        onClick={handleClick}
-        target={isAnchor ? '_self' : undefined}
-        rel={isAnchor ? undefined : 'noopener noreferrer'}
-        className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
-      >
-        {children}
-        <span className="text-[10px]">{isAnchor ? '📍' : '🔗'}</span>
-      </a>
-    );
-  },
-};
 
 /**
  * ChatBot: Asistente Virtual Conversacional & Concierge Ejecutivo de EvenGo.
@@ -78,6 +29,81 @@ export default function ChatBot() {
       scrollToBottom();
     }
   }, [messages, isLoading, isOpen]);
+
+  /**
+   * Manejador de selección de evento recomendado:
+   * 1. Cierra automáticamente la ventana flotante del chat para despejar la vista.
+   * 2. Desplaza suavemente hacia la tarjeta correspondiente en la grilla y aplica feedback visual destacado.
+   */
+  const handleEventSelect = useCallback((anchorLink) => {
+    if (!anchorLink) return;
+
+    // 1. Cerrar automáticamente la ventana flotante del chat
+    setIsOpen(false);
+
+    // 2. Navegación y scroll suave hacia la tarjeta del evento en la agenda
+    const executeScroll = () => {
+      const element = document.querySelector(anchorLink);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const highlightClasses = [
+          'ring-4',
+          'ring-pink-500',
+          'bg-indigo-900/40',
+          'scale-[1.03]',
+          'shadow-[0_0_40px_rgba(236,72,153,0.4)]',
+          'z-10',
+        ];
+        element.classList.add(...highlightClasses);
+        setTimeout(() => {
+          element.classList.remove(...highlightClasses);
+        }, 3000);
+      }
+    };
+
+    // Ejecuta de inmediato
+    executeScroll();
+
+    // Re-ejecuta tras el cierre del modal para garantizar centrado si hubo reajuste de layout
+    setTimeout(executeScroll, 120);
+  }, []);
+
+  // Componentes de estilizado Markdown conectados con el cierre y navegación del chat
+  const markdownComponents = useMemo(
+    () => ({
+      p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+      ul: ({ children }) => <ul className="list-disc ml-4 mb-1.5 space-y-0.5">{children}</ul>,
+      ol: ({ children }) => <ol className="list-decimal ml-4 mb-1.5 space-y-0.5">{children}</ol>,
+      li: ({ children }) => <li className="mb-0.5">{children}</li>,
+      strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+      h3: ({ children }) => <h3 className="text-sm font-bold text-white mt-2 mb-1">{children}</h3>,
+      h4: ({ children }) => <h4 className="text-[13px] font-bold text-white mt-1.5 mb-0.5">{children}</h4>,
+      a: ({ href, children }) => {
+        const isAnchor = href?.startsWith('#');
+
+        const handleClick = (e) => {
+          if (isAnchor) {
+            e.preventDefault();
+            handleEventSelect(href);
+          }
+        };
+
+        return (
+          <a
+            href={isAnchor ? href : undefined}
+            onClick={handleClick}
+            target={isAnchor ? '_self' : undefined}
+            rel={isAnchor ? undefined : 'noopener noreferrer'}
+            className="text-indigo-300 underline font-semibold hover:text-indigo-200 cursor-pointer inline-flex items-center gap-0.5"
+          >
+            {children}
+            <span className="text-[10px]">{isAnchor ? '📍' : '🔗'}</span>
+          </a>
+        );
+      },
+    }),
+    [handleEventSelect]
+  );
 
   const handleSendMessage = async (textToSend) => {
     const query = textToSend || input;
@@ -379,21 +405,16 @@ export default function ChatBot() {
                             {/* Evento Principal con botón de anchor interno */}
                             {itin.primaryEvent && (
                               <div className="flex items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/20 p-1.5 rounded-lg">
-                                <span className="text-[11px] text-indigo-200 font-semibold truncate">
+                                <span
+                                  onClick={itin.primaryEvent.anchorLink ? () => handleEventSelect(itin.primaryEvent.anchorLink) : undefined}
+                                  className={`text-[11px] text-indigo-200 font-semibold truncate ${itin.primaryEvent.anchorLink ? 'cursor-pointer hover:underline' : ''}`}
+                                >
                                   ⭐ {itin.primaryEvent.title}
                                 </span>
                                 {itin.primaryEvent.anchorLink && (
                                   <button
-                                    onClick={() => {
-                                      const el = document.querySelector(itin.primaryEvent.anchorLink);
-                                      if (el) {
-                                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
-                                        el.classList.add(...cls);
-                                        setTimeout(() => el.classList.remove(...cls), 3000);
-                                      }
-                                    }}
-                                    className="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-md font-semibold transition-colors whitespace-nowrap"
+                                    onClick={() => handleEventSelect(itin.primaryEvent.anchorLink)}
+                                    className="flex-shrink-0 text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-md font-semibold transition-colors whitespace-nowrap cursor-pointer"
                                   >
                                     📍 Ver en EvenGo
                                   </button>
@@ -407,19 +428,16 @@ export default function ChatBot() {
                                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Alternativas:</span>
                                 {itin.alternativeEvents.map((ev, eIdx) => (
                                   <div key={eIdx} className="flex items-center justify-between gap-2">
-                                    <span className="text-[11px] text-slate-300 truncate">{ev.title}</span>
+                                    <span
+                                      onClick={ev.anchorLink ? () => handleEventSelect(ev.anchorLink) : undefined}
+                                      className={`text-[11px] text-slate-300 truncate ${ev.anchorLink ? 'cursor-pointer hover:underline' : ''}`}
+                                    >
+                                      {ev.title}
+                                    </span>
                                     {ev.anchorLink && (
                                       <button
-                                        onClick={() => {
-                                          const el = document.querySelector(ev.anchorLink);
-                                          if (el) {
-                                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                            const cls = ['ring-4','ring-pink-500','bg-indigo-900/40','scale-[1.03]','shadow-[0_0_40px_rgba(236,72,153,0.4)]','z-10'];
-                                            el.classList.add(...cls);
-                                            setTimeout(() => el.classList.remove(...cls), 3000);
-                                          }
-                                        }}
-                                        className="flex-shrink-0 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded-md font-semibold transition-colors whitespace-nowrap"
+                                        onClick={() => handleEventSelect(ev.anchorLink)}
+                                        className="flex-shrink-0 text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-0.5 rounded-md font-semibold transition-colors whitespace-nowrap cursor-pointer"
                                       >
                                         📍 Ver
                                       </button>
