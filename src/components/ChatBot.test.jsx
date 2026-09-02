@@ -266,4 +266,160 @@ describe('ChatBot Component - UI States & Conditional Rendering', () => {
     expect(container.textContent).toContain('Llevar abrigo liviano');
     expect(container.querySelector('[data-testid="loading-message-bubble"]')).toBeNull();
   });
+
+  it('cierra automáticamente el chat y hace scroll suave al hacer clic en un enlace de evento Markdown', async () => {
+    // Creamos en el DOM un elemento simulando la tarjeta de evento en la grilla
+    const eventCard = document.createElement('div');
+    eventCard.id = 'event-42';
+    eventCard.textContent = 'Recital en Vivo Palermo';
+    document.body.appendChild(eventCard);
+
+    const encoder = new TextEncoder();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode('data: {"text":"Te recomiendo este show: [Recital en Vivo Palermo](#event-42) en el parque."}\n\n')
+          );
+          controller.enqueue(
+            encoder.encode('data: {"done":true,"toolCalls":[],"actions":{}}\n\n')
+          );
+          controller.close();
+        },
+      }),
+    });
+
+    await act(async () => {
+      root.render(<ChatBot />);
+    });
+
+    // Abrir chat
+    const openBtn = container.querySelector('button[aria-label="Abrir asistente de IA"]');
+    await act(async () => {
+      openBtn.click();
+    });
+
+    // Enviar consulta
+    const input = container.querySelector('input[type="text"]');
+    const sendBtn = container.querySelector('button[aria-label="Enviar mensaje"]');
+
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      ).set;
+      nativeInputValueSetter.call(input, 'recital');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await act(async () => {
+      sendBtn.click();
+    });
+
+    // Verificamos que el enlace Markdown con anchor está en el chat
+    const eventLink = container.querySelector('a[href="#event-42"]');
+    expect(eventLink).toBeTruthy();
+
+    // Verificamos que el chat modal está abierto antes del clic
+    expect(container.querySelector('input[placeholder="Pide un plan, evento o sugerencia..."]')).toBeTruthy();
+
+    // Hacemos clic en el enlace recomendado
+    await act(async () => {
+      eventLink.click();
+    });
+
+    // 1. El chat debe haberse cerrado automáticamente
+    expect(container.querySelector('input[placeholder="Pide un plan, evento o sugerencia..."]')).toBeNull();
+
+    // 2. scrollIntoView debe haberse invocado sobre la tarjeta del evento
+    expect(eventCard.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+
+    // 3. Debe haberse aplicado el feedback visual destacado
+    expect(eventCard.classList.contains('ring-4')).toBe(true);
+    expect(eventCard.classList.contains('ring-pink-500')).toBe(true);
+
+    eventCard.remove();
+  });
+
+  it('cierra automáticamente el chat y hace scroll suave al hacer clic en el botón de itinerario "Ver en EvenGo"', async () => {
+    const primaryEventCard = document.createElement('div');
+    primaryEventCard.id = 'event-101';
+    primaryEventCard.textContent = 'Feria del Libro';
+    document.body.appendChild(primaryEventCard);
+
+    const encoder = new TextEncoder();
+    const mockItinerary = {
+      title: 'Plan Cultural',
+      date: '2026-09-06',
+      primaryEvent: { title: 'Feria del Libro', anchorLink: '#event-101' },
+      alternativeEvents: [{ title: 'Café Literario', anchorLink: '#event-102' }],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"text":"Tu plan cultural:"}\n\n'));
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                done: true,
+                toolCalls: [],
+                actions: { favorites: [], invites: [], itineraries: [mockItinerary] },
+              })}\n\n`
+            )
+          );
+          controller.close();
+        },
+      }),
+    });
+
+    await act(async () => {
+      root.render(<ChatBot />);
+    });
+
+    // Abrir chat
+    const openBtn = container.querySelector('button[aria-label="Abrir asistente de IA"]');
+    await act(async () => {
+      openBtn.click();
+    });
+
+    const input = container.querySelector('input[type="text"]');
+    const sendBtn = container.querySelector('button[aria-label="Enviar mensaje"]');
+
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      ).set;
+      nativeInputValueSetter.call(input, 'cultura');
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await act(async () => {
+      sendBtn.click();
+    });
+
+    // Buscamos el botón '📍 Ver en EvenGo'
+    const viewButton = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent.includes('Ver en EvenGo')
+    );
+    expect(viewButton).toBeTruthy();
+
+    // Hacemos clic en el botón del evento principal
+    await act(async () => {
+      viewButton.click();
+    });
+
+    // 1. El chat debe cerrarse automáticamente
+    expect(container.querySelector('input[placeholder="Pide un plan, evento o sugerencia..."]')).toBeNull();
+
+    // 2. scrollIntoView invocado en la tarjeta del evento
+    expect(primaryEventCard.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    expect(primaryEventCard.classList.contains('ring-pink-500')).toBe(true);
+
+    primaryEventCard.remove();
+  });
 });
+
