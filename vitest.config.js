@@ -38,17 +38,15 @@ export default defineConfig({
   ],
   test: {
     globals: true,
-    environment: 'jsdom',
-    testTimeout: 10000,
-    hookTimeout: 10000,
-    teardownTimeout: 10000,
+    environment: 'node',
+    environmentMatchGlobs: [
+      ['src/**/*.test.{js,jsx}', 'jsdom'],
+    ],
     include: [
       'api/**/*.test.js',
       'src/**/*.test.{js,jsx}',
     ],
     exclude: ['node_modules', 'dist'],
     css: true,
-    threads: false,
-    isolate: false,
   },
 })
