@@ -39,9 +39,11 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    environmentMatchGlobs: [
-      ['api/**/*.test.js', 'node'],
-    ],
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
     include: [
       'api/**/*.test.js',
       'src/**/*.test.{js,jsx}',
