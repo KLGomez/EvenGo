@@ -67,3 +67,79 @@
     -webkit-line-clamp: 3;
   }
 }
+
+/* ==========================================================================
+   Estilos de Impresión Ejecutiva / Exportación a PDF (@media print)
+   ========================================================================== */
+@media print {
+  /* 1. Configuración de página A4 para reportes ejecutivos */
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 15mm 15mm;
+  }
+
+  /* 2. Ocultación exhaustiva de barras de navegación, botones y widgets interactivos */
+  header,
+  nav,
+  .no-print,
+  .print-hidden,
+  button:not(.print-allow),
+  .chatbot-container,
+  #chatbot-widget,
+  [data-no-print="true"] {
+    display: none !important;
+  }
+
+  /* 3. Renderizado fidedigno de colores corporativos e iluminación */
+  html,
+  body {
+    background-color: #0b1120 !important;
+    color: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 4. Control de saltos de página: prevenir partición de tarjetas y gráficos */
+  .print-break-inside-avoid,
+  article,
+  section,
+  .recharts-responsive-container {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* 5. Asegurar altura y renderizado SVG vectorial en Recharts durante la impresión */
+  .recharts-responsive-container {
+    width: 100% !important;
+    min-height: 250px !important;
+    height: 250px !important;
+  }
+
+  .recharts-surface {
+    overflow: visible !important;
+  }
+
+  /* 6. Optimización de contenedores para aprovechar el 100% del ancho imprimible */
+  .max-w-7xl {
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* 7. Eliminar sombras desenfocadas y animaciones pesadas para un trazo nítido */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* 8. Asegurar bordes nítidos en tarjetas en impresión */
+  .print-card-border {
+    border-color: #334155 !important;
+  }
+}
