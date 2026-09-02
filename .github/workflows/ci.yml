@@ -15,11 +15,11 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js 20
+      - name: Configurar Node.js LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
 
       - name: Instalar dependencias
         run: npm ci
@@ -28,7 +28,7 @@ jobs:
         run: npm run lint
 
       - name: Tests unitarios (Vitest)
-        run: npm test
+        run: npm test -- --run
 
       - name: Build de producción
         run: npm run build
